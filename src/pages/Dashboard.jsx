@@ -37,7 +37,7 @@ export default function Dashboard({ profile, session, setPage }) {
     setLatestLessons(lessons.data || []);
     setLatestAssignments(assignments.data || []);
     setLatestPosts(posts.data || []);
-    setActiveUsers((profiles.data || []).filter((user) => isRecentlyActive(user.last_seen_at, 10)));
+    setActiveUsers((profiles.data || []).filter((user) => isRecentlyActive(user.last_seen_at, 2)));
 
     const threadMap = new Map();
     (messages.data || []).forEach((msg) => {

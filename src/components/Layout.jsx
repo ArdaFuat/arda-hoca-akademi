@@ -33,7 +33,7 @@ export default function Layout({ children, page, setPage, profile }) {
       .order('last_seen_at', { ascending: false, nullsFirst: false })
       .limit(8);
 
-    if (!error) setOnlineUsers((data || []).filter((user) => isRecentlyActive(user.last_seen_at, 8)));
+    if (!error) setOnlineUsers((data || []).filter((user) => isRecentlyActive(user.last_seen_at, 2)));
   }
 
   function toggleCollapsed() {

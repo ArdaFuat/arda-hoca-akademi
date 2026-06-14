@@ -38,7 +38,7 @@ export default function App() {
   async function loadProfile(user) {
     if (!user) {
       setProfile(null);
-      return;
+      return null;
     }
 
     const { data, error } = await supabase
@@ -50,23 +50,51 @@ export default function App() {
     if (error) {
       console.error(error);
       setProfile(null);
-      return;
+      return null;
     }
 
     if (!data) {
       const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Öğrenci';
-      const { data: inserted } = await supabase
+      const { data: inserted, error: insertError } = await supabase
         .from('profiles')
         .insert({ id: user.id, full_name: fullName, role: 'student' })
         .select('*')
         .single();
-      setProfile(inserted || { id: user.id, full_name: fullName, role: 'student' });
+
+      if (insertError) {
+        console.error(insertError);
+        const fallback = { id: user.id, full_name: fullName, role: 'student' };
+        setProfile(fallback);
+        await touchLastSeen();
+        return fallback;
+      }
+
+      const nextProfile = inserted || { id: user.id, full_name: fullName, role: 'student' };
+      setProfile(nextProfile);
       await touchLastSeen();
-      return;
+      return nextProfile;
     }
 
     setProfile(data);
     await touchLastSeen();
+    return data;
+  }
+
+  async function applySession(nextSession) {
+    setLoading(true);
+
+    if (!nextSession) {
+      setSession(null);
+      setProfile(null);
+      setPage('dashboard');
+      setLoading(false);
+      return;
+    }
+
+    // Önce loading true kalsın; profil gelmeden Dashboard/Messages render olursa beyaz ekran oluşuyordu.
+    setSession(nextSession);
+    await loadProfile(nextSession.user);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -74,16 +102,12 @@ export default function App() {
 
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
-      setSession(data.session);
-      await loadProfile(data.session?.user);
-      setLoading(false);
+      await applySession(data.session);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      setSession(newSession);
-      await loadProfile(newSession?.user);
-      setLoading(false);
-      if (!newSession) setPage('dashboard');
+      if (!mounted) return;
+      await applySession(newSession);
     });
 
     return () => {
@@ -93,7 +117,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!session?.user) return undefined;
+    if (!session?.user || !profile?.id) return undefined;
 
     touchLastSeen();
     const interval = window.setInterval(touchLastSeen, 60000);
@@ -107,9 +131,10 @@ export default function App() {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, profile?.id]);
 
-  const ActivePage = useMemo(() => PAGES[page] || Dashboard, [page]);
+  const safePage = page === 'admin' && profile?.role !== 'teacher' ? 'dashboard' : page;
+  const ActivePage = useMemo(() => PAGES[safePage] || Dashboard, [safePage]);
 
   if (loading) {
     return (
@@ -124,13 +149,17 @@ export default function App() {
     return <Login />;
   }
 
-  if (page === 'admin' && profile?.role !== 'teacher') {
-    setPage('dashboard');
-    return null;
+  if (!profile) {
+    return (
+      <div className="screen-center">
+        <div className="loader"></div>
+        <p>Profil hazırlanıyor...</p>
+      </div>
+    );
   }
 
   return (
-    <Layout page={page} setPage={setPage} session={session} profile={profile}>
+    <Layout page={safePage} setPage={setPage} session={session} profile={profile}>
       <ActivePage session={session} profile={profile} setPage={setPage} />
     </Layout>
   );
