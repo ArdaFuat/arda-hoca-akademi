@@ -94,3 +94,20 @@ src/
 supabase/
   schema.sql
 ```
+
+
+## Dersler v2 Güncellemesi
+
+Dersler ekranı artık kurs planı mantığıyla çalışır. Bölümler:
+
+- Python
+- Python Geliştirme Ortamı
+- Python Objeleri ve Veri Yapıları
+- Python Operatörler
+- Python Koşul İfadeleri
+- Python Döngüler
+- Python Fonksiyonlar
+- Python Nesne Tabanlı Programlama
+- Django
+
+Mevcut Supabase projesine bu dersleri yüklemek için `supabase/course_plan_v2.sql` dosyasını Supabase SQL Editor içinde çalıştır.

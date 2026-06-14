@@ -81,8 +81,7 @@ export default function App() {
     };
   }, []);
 
-  const safePage = page === 'admin' && profile?.role !== 'teacher' ? 'dashboard' : page;
-  const ActivePage = useMemo(() => PAGES[safePage] || Dashboard, [safePage]);
+  const ActivePage = useMemo(() => PAGES[page] || Dashboard, [page]);
 
   if (loading) {
     return (
@@ -97,8 +96,13 @@ export default function App() {
     return <Login />;
   }
 
+  if (page === 'admin' && profile?.role !== 'teacher') {
+    setPage('dashboard');
+    return null;
+  }
+
   return (
-    <Layout page={safePage} setPage={setPage} session={session} profile={profile}>
+    <Layout page={page} setPage={setPage} session={session} profile={profile}>
       <ActivePage session={session} profile={profile} setPage={setPage} />
     </Layout>
   );
