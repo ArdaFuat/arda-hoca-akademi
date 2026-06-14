@@ -26,6 +26,15 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState('dashboard');
 
+  async function touchLastSeen() {
+    try {
+      await supabase.rpc('touch_profile_last_seen');
+    } catch (error) {
+      // Migration çalıştırılmadıysa siteyi bozmasın.
+      console.warn('last_seen güncellenemedi:', error?.message || error);
+    }
+  }
+
   async function loadProfile(user) {
     if (!user) {
       setProfile(null);
@@ -52,10 +61,12 @@ export default function App() {
         .select('*')
         .single();
       setProfile(inserted || { id: user.id, full_name: fullName, role: 'student' });
+      await touchLastSeen();
       return;
     }
 
     setProfile(data);
+    await touchLastSeen();
   }
 
   useEffect(() => {
@@ -80,6 +91,23 @@ export default function App() {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!session?.user) return undefined;
+
+    touchLastSeen();
+    const interval = window.setInterval(touchLastSeen, 60000);
+
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') touchLastSeen();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [session?.user?.id]);
 
   const ActivePage = useMemo(() => PAGES[page] || Dashboard, [page]);
 

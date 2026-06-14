@@ -32,7 +32,15 @@ export default function Assignments({ profile, session }) {
       : supabase.from('assignments').select('*').or(`assigned_to.is.null,assigned_to.eq.${session.user.id}`).order('created_at', { ascending: false });
 
     const { data } = await query;
-    setAssignments(data || []);
+    const rows = data || [];
+    setAssignments(rows);
+
+    const requestedAssignmentId = localStorage.getItem('academy_open_assignment_id');
+    const requestedAssignment = requestedAssignmentId ? rows.find((item) => item.id === requestedAssignmentId) : null;
+    if (requestedAssignment) {
+      localStorage.removeItem('academy_open_assignment_id');
+      await selectAssignment(requestedAssignment);
+    }
 
     if (profile.role === 'teacher') {
       const { data: studentList } = await supabase.from('profiles').select('id, full_name, role').eq('role', 'student').order('full_name');

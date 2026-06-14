@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { CodeBlock, CodeEditor } from '../components/CodeBlock';
 import {
+  ArrowLeft,
   BookOpen,
   CheckCircle2,
   ChevronRight,
@@ -15,69 +16,15 @@ import {
 } from 'lucide-react';
 
 const COURSE_SECTIONS = [
-  {
-    key: 'python',
-    title: 'Python',
-    shortTitle: 'Python',
-    subtitle: 'Python dünyasına giriş ve kursun mantığı.',
-    accent: '01'
-  },
-  {
-    key: 'gelistirme-ortami',
-    title: 'Python Geliştirme Ortamı',
-    shortTitle: 'Geliştirme Ortamı',
-    subtitle: 'Replit, kurulum, editör, komut satırı ve ilk uygulama.',
-    accent: '02'
-  },
-  {
-    key: 'objeler-veri-yapilari',
-    title: 'Python Objeleri ve Veri Yapıları',
-    shortTitle: 'Objeler & Veri Yapıları',
-    subtitle: 'Sayılar, stringler, listeler, tuple, set ve dictionary.',
-    accent: '03'
-  },
-  {
-    key: 'operatorler',
-    title: 'Python Operatörler',
-    shortTitle: 'Operatörler',
-    subtitle: 'Aritmetik, atama, karşılaştırma ve mantıksal operatörler.',
-    accent: '04'
-  },
-  {
-    key: 'kosul-ifadeleri',
-    title: 'Python Koşul İfadeleri',
-    shortTitle: 'Koşullar',
-    subtitle: 'if, elif, else ve karar veren programlar.',
-    accent: '05'
-  },
-  {
-    key: 'donguler',
-    title: 'Python Döngüler',
-    shortTitle: 'Döngüler',
-    subtitle: 'for, while, break, continue ve döngü uygulamaları.',
-    accent: '06'
-  },
-  {
-    key: 'fonksiyonlar',
-    title: 'Python Fonksiyonlar',
-    shortTitle: 'Fonksiyonlar',
-    subtitle: 'Fonksiyon yazma, parametre, lambda ve scope.',
-    accent: '07'
-  },
-  {
-    key: 'oop',
-    title: 'Python Nesne Tabanlı Programlama',
-    shortTitle: 'Nesne Tabanlı',
-    subtitle: 'Class, method, kalıtım ve OOP mini proje.',
-    accent: '08'
-  },
-  {
-    key: 'django',
-    title: 'Django',
-    shortTitle: 'Django',
-    subtitle: 'Python ile web geliştirme, view, template, model ve migration.',
-    accent: '09'
-  }
+  { key: 'python', title: 'Python', shortTitle: 'Python', subtitle: 'Python dünyasına giriş ve kursun mantığı.', accent: '01' },
+  { key: 'gelistirme-ortami', title: 'Python Geliştirme Ortamı', shortTitle: 'Geliştirme Ortamı', subtitle: 'Replit, kurulum, editör, komut satırı ve ilk uygulama.', accent: '02' },
+  { key: 'objeler-veri-yapilari', title: 'Python Objeleri ve Veri Yapıları', shortTitle: 'Objeler & Veri Yapıları', subtitle: 'Sayılar, stringler, listeler, tuple, set ve dictionary.', accent: '03' },
+  { key: 'operatorler', title: 'Python Operatörler', shortTitle: 'Operatörler', subtitle: 'Aritmetik, atama, karşılaştırma ve mantıksal operatörler.', accent: '04' },
+  { key: 'kosul-ifadeleri', title: 'Python Koşul İfadeleri', shortTitle: 'Koşullar', subtitle: 'if, elif, else ve karar veren programlar.', accent: '05' },
+  { key: 'donguler', title: 'Python Döngüler', shortTitle: 'Döngüler', subtitle: 'for, while, break, continue ve döngü uygulamaları.', accent: '06' },
+  { key: 'fonksiyonlar', title: 'Python Fonksiyonlar', shortTitle: 'Fonksiyonlar', subtitle: 'Fonksiyon yazma, parametre, lambda ve scope.', accent: '07' },
+  { key: 'oop', title: 'Python Nesne Tabanlı Programlama', shortTitle: 'Nesne Tabanlı', subtitle: 'Class, method, kalıtım ve OOP mini proje.', accent: '08' },
+  { key: 'django', title: 'Django', shortTitle: 'Django', subtitle: 'Python ile web geliştirme, view, template, model ve migration.', accent: '09' }
 ];
 
 const sectionMap = Object.fromEntries(COURSE_SECTIONS.map((section) => [section.key, section]));
@@ -128,6 +75,7 @@ function renderContent(content) {
 export default function Lessons({ profile }) {
   const [lessons, setLessons] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [detailMode, setDetailMode] = useState(false);
   const [activeSection, setActiveSection] = useState(COURSE_SECTIONS[0].key);
   const [form, setForm] = useState(emptyLesson);
   const [message, setMessage] = useState('');
@@ -147,23 +95,49 @@ export default function Lessons({ profile }) {
     if (!error) {
       const rows = data || [];
       setLessons(rows);
+
+      const requestedLessonId = localStorage.getItem('academy_open_lesson_id');
+      const requestedLesson = requestedLessonId ? rows.find((lesson) => lesson.id === requestedLessonId) : null;
+
+      if (requestedLesson) {
+        localStorage.removeItem('academy_open_lesson_id');
+        selectLesson(requestedLesson, true);
+        return;
+      }
+
       if (!selected && rows.length > 0) {
         const first = rows[0];
         setSelected(first);
         setActiveSection(inferCategory(first));
+        setForm({ ...emptyLesson, ...first, category_key: inferCategory(first) });
       }
     }
   }
 
-  function selectLesson(lesson) {
+  function selectLesson(lesson, openDetail = true) {
     setSelected(lesson);
+    setDetailMode(openDetail);
     setActiveSection(inferCategory(lesson));
     setForm({ ...emptyLesson, ...lesson, category_key: inferCategory(lesson) });
     setMessage('');
   }
 
+  function selectSection(sectionKey) {
+    setActiveSection(sectionKey);
+    setDetailMode(false);
+    const firstInSection = lessons.find((lesson) => inferCategory(lesson) === sectionKey);
+    if (firstInSection) {
+      setSelected(firstInSection);
+      setForm({ ...emptyLesson, ...firstInSection, category_key: inferCategory(firstInSection) });
+    } else {
+      setSelected(null);
+      setForm({ ...emptyLesson, category_key: sectionKey, order_index: lessons.length + 1 });
+    }
+  }
+
   function startNewLesson(sectionKey = activeSection) {
     setSelected(null);
+    setDetailMode(false);
     setForm({ ...emptyLesson, category_key: sectionKey, order_index: lessons.length + 1 });
     setMessage('');
   }
@@ -196,6 +170,7 @@ export default function Lessons({ profile }) {
       setMessage('Ders kaydedildi.');
       setForm(emptyLesson);
       setSelected(null);
+      setDetailMode(false);
       load();
     }
   }
@@ -204,6 +179,7 @@ export default function Lessons({ profile }) {
     if (!confirm('Bu dersi silmek istiyor musun?')) return;
     await supabase.from('lessons').delete().eq('id', id);
     setSelected(null);
+    setDetailMode(false);
     setForm(emptyLesson);
     load();
   }
@@ -218,124 +194,116 @@ export default function Lessons({ profile }) {
   }, [lessons, activeSection, search]);
 
   const activeSectionInfo = sectionMap[activeSection] || COURSE_SECTIONS[0];
+  const selectedSectionInfo = selected ? sectionMap[inferCategory(selected)] : activeSectionInfo;
   const totalMinutes = lessons.reduce((sum, lesson) => sum + Number(lesson.estimated_minutes || 20), 0);
 
   return (
     <div className="page course-page">
-      <section className="course-hero panel">
-        <div>
-          <div className="pill"><BookOpen size={16} /> Kurs Planı</div>
-          <h2>Python Eğitim Yol Haritası</h2>
-          <p>Konuları kurs bölümleri halinde takip et. Önce bölüm seç, sonra o bölümün derslerini sırayla aç.</p>
-        </div>
-        <div className="course-hero-stats">
-          <div><strong>{COURSE_SECTIONS.length}</strong><span>Bölüm</span></div>
-          <div><strong>{lessons.length}</strong><span>Ders</span></div>
-          <div><strong>{totalMinutes}</strong><span>Dakika</span></div>
-        </div>
-      </section>
+      {!detailMode && (
+        <section className="course-hero panel">
+          <div>
+            <div className="pill"><BookOpen size={16} /> Kurs Planı</div>
+            <h2>Python Eğitim Yol Haritası</h2>
+            <p>Konuları kurs bölümleri halinde takip et. Önce bölüm seç, sonra o bölümün derslerini sırayla aç.</p>
+          </div>
+          <div className="course-hero-stats">
+            <div><strong>{COURSE_SECTIONS.length}</strong><span>Bölüm</span></div>
+            <div><strong>{lessons.length}</strong><span>Ders</span></div>
+            <div><strong>{totalMinutes}</strong><span>Dakika</span></div>
+          </div>
+        </section>
+      )}
 
-      <section className="course-shell">
-        <aside className="panel course-sidebar">
-          <div className="course-sidebar-title">
-            <Layers size={18} />
-            <span>Bölümler</span>
-          </div>
-          <div className="course-search">
-            <Search size={17} />
-            <input placeholder="Ders ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <div className="section-list">
-            {COURSE_SECTIONS.map((section) => {
-              const count = getSectionLessonCount(lessons, section.key);
-              return (
-                <button
-                  key={section.key}
-                  className={`section-card ${activeSection === section.key ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveSection(section.key);
-                    const firstInSection = lessons.find((lesson) => inferCategory(lesson) === section.key);
-                    if (firstInSection) selectLesson(firstInSection);
-                    else setSelected(null);
-                  }}
-                >
-                  <span className="section-number">{section.accent}</span>
-                  <span className="section-main">
-                    <strong>{section.shortTitle}</strong>
-                    <small>{count} ders</small>
-                  </span>
-                  <ChevronRight size={17} />
-                </button>
-              );
-            })}
-          </div>
-        </aside>
-
-        <main className="course-main">
-          <div className="panel module-header-card">
-            <div>
-              <span className="module-eyebrow">Bölüm {activeSectionInfo.accent}</span>
-              <h3>{activeSectionInfo.title}</h3>
-              <p>{activeSectionInfo.subtitle}</p>
+      {detailMode && selected ? (
+        <section className="lesson-fullscreen panel">
+          <button className="ghost-button back-button" onClick={() => setDetailMode(false)}><ArrowLeft size={16} /> Ders listesine dön</button>
+          <article>
+            <div className="reader-topline">
+              <span><CheckCircle2 size={16} /> Ders {selected.order_index}</span>
+              <span>{selectedSectionInfo?.title}</span>
             </div>
-            {profile?.role === 'teacher' && (
-              <button className="secondary-button" onClick={() => startNewLesson(activeSection)}>
-                + Bu bölüme ders ekle
-              </button>
+            <h2>{selected.title}</h2>
+            <p className="reader-description">{selected.description}</p>
+
+            <div className="lesson-meta-row">
+              <span><Clock3 size={15} /> {selected.estimated_minutes || 20} dakika</span>
+              <span>{selected.difficulty || 'Başlangıç'}</span>
+            </div>
+
+            <div className="lesson-content-rich whitespace">{renderContent(selected.content)}</div>
+
+            {selected.example_code && (
+              <div className="example-section">
+                <h4><Code2 size={17} /> Örnek kod</h4>
+                <CodeBlock code={selected.example_code} title={`${selected.title || 'ornek'}.py`} />
+              </div>
             )}
-          </div>
 
-          <div className="lesson-roadmap">
-            {filteredLessons.length === 0 && <div className="panel empty-state">Bu bölümde ders bulunamadı.</div>}
-            {filteredLessons.map((lesson, index) => (
-              <button
-                key={lesson.id}
-                className={`roadmap-item ${selected?.id === lesson.id ? 'active' : ''}`}
-                onClick={() => selectLesson(lesson)}
-              >
-                <span className="roadmap-index">{String(index + 1).padStart(2, '0')}</span>
-                <span className="roadmap-body">
-                  <strong>{lesson.title}</strong>
-                  <small>{lesson.description}</small>
-                  <em><Clock3 size={13} /> {lesson.estimated_minutes || 20} dk · {lesson.difficulty || 'Başlangıç'}</em>
-                </span>
-                <PlayCircle size={22} />
-              </button>
-            ))}
-          </div>
-
-          <div className="panel lesson-reader">
-            {selected ? (
-              <article>
-                <div className="reader-topline">
-                  <span><CheckCircle2 size={16} /> Ders {selected.order_index}</span>
-                  <span>{sectionMap[inferCategory(selected)]?.title}</span>
-                </div>
-                <h3>{selected.title}</h3>
-                <p className="reader-description">{selected.description}</p>
-
-                <div className="lesson-content-rich whitespace">{renderContent(selected.content)}</div>
-
-                {selected.example_code && (
-                  <div className="example-section">
-                    <h4><Code2 size={17} /> Örnek kod</h4>
-                    <CodeBlock code={selected.example_code} title={`${selected.title || 'ornek'}.py`} />
-                  </div>
-                )}
-
-                {selected.practice_task && (
-                  <div className="practice-box">
-                    <strong>Mini görev</strong>
-                    <p>{selected.practice_task}</p>
-                  </div>
-                )}
-              </article>
-            ) : (
-              <div className="empty-state">Bu bölümden bir ders seç.</div>
+            {selected.practice_task && (
+              <div className="practice-box">
+                <strong>Mini görev</strong>
+                <p>{selected.practice_task}</p>
+              </div>
             )}
-          </div>
-        </main>
-      </section>
+          </article>
+        </section>
+      ) : (
+        <section className="course-shell">
+          <aside className="panel course-sidebar">
+            <div className="course-sidebar-title">
+              <Layers size={18} />
+              <span>Bölümler</span>
+            </div>
+            <div className="course-search">
+              <Search size={17} />
+              <input placeholder="Ders ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <div className="section-list">
+              {COURSE_SECTIONS.map((section) => {
+                const count = getSectionLessonCount(lessons, section.key);
+                return (
+                  <button key={section.key} className={`section-card ${activeSection === section.key ? 'active' : ''}`} onClick={() => selectSection(section.key)}>
+                    <span className="section-number">{section.accent}</span>
+                    <span className="section-main">
+                      <strong>{section.shortTitle}</strong>
+                      <small>{count} ders</small>
+                    </span>
+                    <ChevronRight size={17} />
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          <main className="course-main">
+            <div className="panel module-header-card">
+              <div>
+                <span className="module-eyebrow">Bölüm {activeSectionInfo.accent}</span>
+                <h3>{activeSectionInfo.title}</h3>
+                <p>{activeSectionInfo.subtitle}</p>
+              </div>
+              {profile?.role === 'teacher' && (
+                <button className="secondary-button" onClick={() => startNewLesson(activeSection)}>+ Bu bölüme ders ekle</button>
+              )}
+            </div>
+
+            <div className="lesson-roadmap">
+              {filteredLessons.length === 0 && <div className="panel empty-state">Bu bölümde ders bulunamadı.</div>}
+              {filteredLessons.map((lesson, index) => (
+                <button key={lesson.id} className={`roadmap-item ${selected?.id === lesson.id ? 'active' : ''}`} onClick={() => selectLesson(lesson, true)}>
+                  <span className="roadmap-index">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="roadmap-body">
+                    <strong>{lesson.title}</strong>
+                    <small>{lesson.description}</small>
+                    <em><Clock3 size={13} /> {lesson.estimated_minutes || 20} dk · {lesson.difficulty || 'Başlangıç'}</em>
+                  </span>
+                  <PlayCircle size={22} />
+                </button>
+              ))}
+            </div>
+          </main>
+        </section>
+      )}
 
       {profile?.role === 'teacher' && (
         <section className="panel teacher-editor">

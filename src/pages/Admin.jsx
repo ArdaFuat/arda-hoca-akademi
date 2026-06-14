@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Shield, UserCheck } from 'lucide-react';
-import { formatDate } from '../lib/helpers';
+import { Clock3, Shield, UserCheck } from 'lucide-react';
+import { formatDate, formatDateTime, formatRelativeTime, isRecentlyActive } from '../lib/helpers';
 
 export default function Admin({ profile }) {
   const [students, setStudents] = useState([]);
@@ -41,7 +41,7 @@ export default function Admin({ profile }) {
         <div>
           <div className="pill"><Shield size={16} /> Yönetim</div>
           <h2>Öğretmen paneli</h2>
-          <p>Öğrencileri, dersleri ve ödevleri genel olarak kontrol et.</p>
+          <p>Öğrencileri, dersleri, ödevleri ve kullanıcı hareketlerini genel olarak kontrol et.</p>
         </div>
       </div>
 
@@ -49,30 +49,47 @@ export default function Admin({ profile }) {
         <div className="stat-card static"><UserCheck /><span>Kullanıcı</span><strong>{students.length}</strong></div>
         <div className="stat-card static"><UserCheck /><span>Ders</span><strong>{lessons.length}</strong></div>
         <div className="stat-card static"><UserCheck /><span>Ödev</span><strong>{assignments.length}</strong></div>
+        <div className="stat-card static"><Clock3 /><span>Aktif</span><strong>{students.filter((user) => isRecentlyActive(user.last_seen_at)).length}</strong></div>
       </section>
 
       <section className="panel">
-        <h3>Kullanıcılar</h3>
+        <div className="panel-header">
+          <div>
+            <h3>Kullanıcılar</h3>
+            <p className="muted">Son görülme bilgisi kullanıcı siteye girince ve açık kaldığı sürece güncellenir.</p>
+          </div>
+          <button className="secondary-button" onClick={load}>Yenile</button>
+        </div>
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Ad</th><th>Rol</th><th>Kayıt</th><th>İşlem</th></tr>
+              <tr><th>Ad</th><th>Rol</th><th>Kayıt</th><th>Son görülme</th><th>Durum</th><th>İşlem</th></tr>
             </thead>
             <tbody>
-              {students.map((user) => (
-                <tr key={user.id}>
-                  <td>{user.full_name}</td>
-                  <td>{user.role === 'teacher' ? 'Öğretmen' : 'Öğrenci'}</td>
-                  <td>{formatDate(user.created_at)}</td>
-                  <td>
-                    {user.id !== profile.id && (
-                      user.role === 'teacher'
-                        ? <button className="secondary-button" onClick={() => makeStudent(user)}>Öğrenci yap</button>
-                        : <button className="secondary-button" onClick={() => makeTeacher(user)}>Öğretmen yap</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {students.map((user) => {
+                const online = isRecentlyActive(user.last_seen_at);
+                return (
+                  <tr key={user.id}>
+                    <td>{user.full_name}</td>
+                    <td>{user.role === 'teacher' ? 'Öğretmen' : 'Öğrenci'}</td>
+                    <td>{formatDate(user.created_at)}</td>
+                    <td>
+                      <div className="last-seen-cell">
+                        <strong>{formatRelativeTime(user.last_seen_at)}</strong>
+                        <span>{formatDateTime(user.last_seen_at)}</span>
+                      </div>
+                    </td>
+                    <td><span className={`status-pill ${online ? 'online' : 'offline'}`}>{online ? 'Aktif' : 'Çevrim dışı'}</span></td>
+                    <td>
+                      {user.id !== profile.id && (
+                        user.role === 'teacher'
+                          ? <button className="secondary-button" onClick={() => makeStudent(user)}>Öğrenci yap</button>
+                          : <button className="secondary-button" onClick={() => makeTeacher(user)}>Öğretmen yap</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
