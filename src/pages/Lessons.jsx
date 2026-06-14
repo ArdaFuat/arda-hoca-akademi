@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { CodeBlock, CodeEditor } from '../components/CodeBlock';
 import {
   BookOpen,
   CheckCircle2,
@@ -318,7 +319,7 @@ export default function Lessons({ profile }) {
                 {selected.example_code && (
                   <div className="example-section">
                     <h4><Code2 size={17} /> Örnek kod</h4>
-                    <pre className="code-block"><code>{selected.example_code}</code></pre>
+                    <CodeBlock code={selected.example_code} title={`${selected.title || 'ornek'}.py`} />
                   </div>
                 )}
 
@@ -382,7 +383,7 @@ export default function Lessons({ profile }) {
             </label>
             <label className="span-2">
               Örnek kod
-              <textarea rows="7" value={form.example_code} onChange={(e) => setForm({ ...form, example_code: e.target.value })} />
+              <CodeEditor rows={8} value={form.example_code} onChange={(value) => setForm({ ...form, example_code: value })} title="ornek_kod.py" placeholder="Örnek Python kodunu buraya yaz..." />
             </label>
             <label className="span-2">
               Mini görev

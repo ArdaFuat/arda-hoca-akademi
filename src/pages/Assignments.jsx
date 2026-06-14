@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { ClipboardList, Save, Send, Trash2 } from 'lucide-react';
 import { formatDate } from '../lib/helpers';
+import { CodeBlock, CodeEditor } from '../components/CodeBlock';
 
 const emptyAssignment = {
   title: '',
@@ -153,12 +154,12 @@ export default function Assignments({ profile, session }) {
               </div>
               <p className="muted">Teslim: {formatDate(selected.due_date)}</p>
               <div className="content-box whitespace">{selected.description}</div>
-              {selected.starter_code && <pre className="code-block"><code>{selected.starter_code}</code></pre>}
+              {selected.starter_code && <CodeBlock code={selected.starter_code} title="baslangic_kodu.py" />}
 
               {profile.role !== 'teacher' && (
                 <div className="submission-box">
                   <h4>Teslim alanı</h4>
-                  <textarea rows="12" value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} placeholder="Kodunu buraya yapıştır..." />
+                  <CodeEditor rows={12} value={submissionText} onChange={setSubmissionText} title="teslim.py" placeholder="Kodunu buraya yaz veya yapıştır..." />
                   <button className="primary-button" onClick={submitAssignment}><Send size={16} /> Ödevi teslim et</button>
                 </div>
               )}
@@ -195,7 +196,7 @@ export default function Assignments({ profile, session }) {
             </label>
             <label className="span-2">
               Başlangıç kodu
-              <textarea rows="7" value={form.starter_code} onChange={(e) => setForm({ ...form, starter_code: e.target.value })} />
+              <CodeEditor rows={8} value={form.starter_code} onChange={(value) => setForm({ ...form, starter_code: value })} title="baslangic_kodu.py" placeholder="Öğrencinin başlayacağı kodu buraya yaz..." />
             </label>
             <button className="primary-button span-2"><Save size={16} /> Kaydet</button>
           </form>
@@ -211,7 +212,7 @@ export default function Assignments({ profile, session }) {
                 <strong>{sub.student?.full_name}</strong>
                 <span>{sub.assignment?.title}</span>
               </div>
-              <pre><code>{sub.code_text.slice(0, 400)}{sub.code_text.length > 400 ? '...' : ''}</code></pre>
+              <CodeBlock compact code={`${sub.code_text.slice(0, 400)}${sub.code_text.length > 400 ? '\n# ...' : ''}`} title="teslim_onizleme.py" />
               <div className="row-actions">
                 <button className="secondary-button" onClick={() => saveFeedback(sub)}>Geri bildirim yaz</button>
                 {sub.teacher_feedback && <span className="feedback-chip">Geri bildirim var</span>}

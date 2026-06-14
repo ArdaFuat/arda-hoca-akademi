@@ -273,3 +273,151 @@ th { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spa
   .roadmap-index { width: 42px; height: 42px; }
   .lesson-reader { padding: 22px; }
 }
+
+/* VS Code style code blocks / editors */
+.vscode-card,
+.vscode-editor-card {
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid #1f2937;
+  background: #0d1117;
+  box-shadow: 0 18px 45px rgba(2, 6, 23, .22);
+  margin: 12px 0 18px;
+}
+
+.vscode-card.compact { margin: 6px 0; border-radius: 14px; box-shadow: none; }
+
+.vscode-titlebar {
+  height: 42px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  background: #161b22;
+  border-bottom: 1px solid #263244;
+  color: #c9d1d9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+}
+
+.vscode-dots { display: inline-flex; gap: 7px; align-items: center; }
+.vscode-dots span { width: 11px; height: 11px; border-radius: 999px; display: block; }
+.vscode-dots span:nth-child(1) { background: #ff5f56; }
+.vscode-dots span:nth-child(2) { background: #ffbd2e; }
+.vscode-dots span:nth-child(3) { background: #27c93f; }
+.vscode-file { color: #e5edf5; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vscode-lang { color: #7dd3fc; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+
+.vscode-code {
+  padding: 12px 0;
+  overflow-x: auto;
+  background: linear-gradient(90deg, #0d1117 0, #0d1117 100%);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  line-height: 1.72;
+}
+
+.vscode-line {
+  display: grid;
+  grid-template-columns: 58px max-content;
+  min-width: 100%;
+}
+
+.vscode-line:hover { background: rgba(99, 102, 241, .08); }
+.vscode-line-number {
+  color: #6e7681;
+  user-select: none;
+  text-align: right;
+  padding-right: 16px;
+  border-right: 1px solid rgba(110, 118, 129, .22);
+}
+.vscode-line-code {
+  white-space: pre;
+  color: #d4d4d4;
+  padding-left: 18px;
+  padding-right: 24px;
+}
+
+.syntax-comment { color: #6a9955; font-style: italic; }
+.syntax-string { color: #ce9178; }
+.syntax-number { color: #b5cea8; }
+.syntax-keyword { color: #c586c0; font-weight: 800; }
+.syntax-builtin { color: #4fc1ff; }
+.syntax-variable { color: #dcdcaa; }
+.syntax-operator { color: #d4d4d4; }
+.syntax-punctuation { color: #8087a2; }
+.syntax-plain { color: #d4d4d4; }
+
+.vscode-editor-shell {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  background: #0d1117;
+  max-height: none;
+}
+
+.vscode-editor-gutter {
+  padding: 12px 0;
+  background: #0d1117;
+  border-right: 1px solid rgba(110, 118, 129, .22);
+  color: #6e7681;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  line-height: 1.72;
+  user-select: none;
+}
+
+.vscode-editor-gutter span {
+  display: block;
+  height: 24.08px;
+  padding-right: 16px;
+  text-align: right;
+}
+
+.vscode-editor-shell textarea,
+.editor-panel .vscode-editor-shell textarea,
+.submission-box .vscode-editor-shell textarea,
+.form-grid .vscode-editor-shell textarea {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  resize: vertical;
+  min-height: 220px;
+  width: 100%;
+  padding: 12px 18px;
+  background: #0d1117;
+  color: #d4d4d4;
+  caret-color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  line-height: 1.72;
+  tab-size: 4;
+  outline: none;
+}
+
+.editor-panel .vscode-editor-shell textarea { min-height: 480px; }
+.vscode-editor-shell textarea::placeholder { color: #6e7681; }
+.vscode-editor-shell textarea:focus { box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .45); }
+
+.code-block, .submission-row pre { display: none; }
+.output-panel pre {
+  background: #0d1117;
+  color: #d4d4d4;
+  border: 1px solid #1f2937;
+  border-radius: 18px;
+  padding: 18px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+label .vscode-editor-card { margin-top: 8px; }
+
+@media (max-width: 620px) {
+  .vscode-titlebar { grid-template-columns: auto minmax(0, 1fr); }
+  .vscode-lang { display: none; }
+  .vscode-line { grid-template-columns: 44px max-content; }
+  .vscode-line-number { padding-right: 10px; }
+  .vscode-line-code { padding-left: 12px; }
+  .vscode-editor-shell { grid-template-columns: 44px 1fr; }
+  .vscode-editor-gutter span { padding-right: 10px; }
+}

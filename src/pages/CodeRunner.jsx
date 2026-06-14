@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Code2, Play } from 'lucide-react';
+import { CodeEditor } from '../components/CodeBlock';
 
 const defaultCode = `isim = "Arda Hoca Akademi"
 print("Merhaba", isim)
@@ -75,7 +76,7 @@ sys.stderr = io.StringIO()
       <section className="runner-grid">
         <div className="panel editor-panel">
           <h3>Kod</h3>
-          <textarea value={code} onChange={(e) => setCode(e.target.value)} spellCheck="false" />
+          <CodeEditor rows={18} value={code} onChange={setCode} title="runner.py" placeholder="Çalıştırmak istediğin Python kodunu yaz..." />
         </div>
         <div className="panel output-panel">
           <h3>Çıktı</h3>
