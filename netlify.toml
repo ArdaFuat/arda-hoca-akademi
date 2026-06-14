@@ -1,5 +1,5 @@
 [build]
-  command = "npm install --no-audit --no-fund --prefer-online && npx vite build"
+  command = "npm install --package-lock=false --no-audit --no-fund && npm run build"
   publish = "dist"
 
 [[redirects]]
