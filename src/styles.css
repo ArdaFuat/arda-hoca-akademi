@@ -650,3 +650,11 @@ label .vscode-editor-card { margin-top: 8px; }
     justify-content: center;
   }
 }
+
+.error-text {
+  color: #dc2626 !important;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  padding: 10px 12px;
+}

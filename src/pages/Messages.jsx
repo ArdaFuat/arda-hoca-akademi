@@ -5,6 +5,7 @@ import { formatDateTime } from '../lib/helpers';
 
 export default function Messages({ profile, session }) {
   const [students, setStudents] = useState([]);
+  const [studentListError, setStudentListError] = useState('');
   const [selectedStudent, setSelectedStudent] = useState(profile.role === 'teacher' ? '' : session.user.id);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
@@ -68,11 +69,20 @@ export default function Messages({ profile, session }) {
   }, [messages]);
 
   async function loadStudents() {
-    const { data } = await supabase
+    setStudentListError('');
+
+    const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, last_seen')
+      .select('id, full_name, role, last_seen_at')
       .eq('role', 'student')
       .order('full_name');
+
+    if (error) {
+      console.error('Öğrenci listesi yüklenemedi:', error);
+      setStudentListError(error.message);
+      setStudents([]);
+      return;
+    }
 
     setStudents(data || []);
     if (!selectedStudent && data?.[0]) setSelectedStudent(data[0].id);
@@ -136,7 +146,8 @@ export default function Messages({ profile, session }) {
               <h3>Öğrenciler</h3>
               <button className="icon-button" onClick={loadStudents} title="Öğrencileri yenile"><RefreshCw size={16} /></button>
             </div>
-            {students.length === 0 && <p className="muted">Henüz öğrenci yok.</p>}
+            {studentListError && <p className="muted error-text">Öğrenciler yüklenemedi: {studentListError}</p>}
+            {!studentListError && students.length === 0 && <p className="muted">Henüz öğrenci yok. Öğrenci hesabı açıldıysa sayfayı yenile veya öğrencinin profil rolünü kontrol et.</p>}
             {students.map((student) => (
               <button key={student.id} className={selectedStudent === student.id ? 'active' : ''} onClick={() => setSelectedStudent(student.id)}>
                 <span>{student.full_name}</span>
