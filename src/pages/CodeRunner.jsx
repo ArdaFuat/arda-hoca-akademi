@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Code2, Play } from 'lucide-react';
 import { CodeEditor } from '../components/CodeBlock';
 
@@ -37,6 +37,14 @@ function loadPyodideRuntime() {
 
 export default function CodeRunner() {
   const [code, setCode] = useState(defaultCode);
+
+  useEffect(() => {
+    const sharedCode = localStorage.getItem('academy_runner_code');
+    if (sharedCode) {
+      localStorage.removeItem('academy_runner_code');
+      setCode(sharedCode);
+    }
+  }, []);
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
 

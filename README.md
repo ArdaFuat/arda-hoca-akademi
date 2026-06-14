@@ -111,3 +111,31 @@ Dersler ekranı artık kurs planı mantığıyla çalışır. Bölümler:
 - Django
 
 Mevcut Supabase projesine bu dersleri yüklemek için `supabase/course_plan_v2.sql` dosyasını Supabase SQL Editor içinde çalıştır.
+
+## v4 Güncellemesi
+
+Bu sürümde şu özellikler eklendi:
+
+- Sol menü daralt / genişlet
+- Ana sayfa gerçek dashboard görünümü
+- Aktif kişiler ve son görülme bilgisi
+- Öğretmen ve öğrenci için ayrı ana sayfa kartları
+- Ders ilerleme yüzdesi
+- Ders tamamlandı işareti
+- Önceki / sonraki ders butonları
+- Ders içi çoktan seçmeli test ve boşluk doldurma soruları
+- Topluluk filtreleri, sabitleme, çözüldü işareti, faydalı sayacı
+- Topluluktaki kodu Python Runner alanına gönderip çalıştırma
+
+Supabase tarafında `supabase/dashboard_lessons_v4.sql` dosyasını SQL Editor içinde bir kez çalıştır.
+
+## v5 - Canlı Mesajlaşma Düzeltmesi
+
+Mesajlar sayfa yenilemeden gelsin diye `src/pages/Messages.jsx` güncellendi.
+Supabase tarafında ayrıca şu dosya SQL Editor içinde çalıştırılmalıdır:
+
+```text
+supabase/messages_realtime_v5.sql
+```
+
+Bu SQL, `public.messages` tablosunu Supabase Realtime yayınına ekler.

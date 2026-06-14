@@ -2,13 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   BookOpen,
+  CheckCircle2,
   ClipboardList,
   Code2,
   ExternalLink,
+  Filter,
   Link as LinkIcon,
   MessageSquarePlus,
+  Pin,
   Search,
   Tag,
+  ThumbsUp,
   Trash2,
   Users
 } from 'lucide-react';
@@ -32,6 +36,8 @@ export default function Community({ profile, setPage }) {
   const [assignments, setAssignments] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [quickFilter, setQuickFilter] = useState('all');
   const [commentDrafts, setCommentDrafts] = useState({});
   const [form, setForm] = useState({
     title: '',
@@ -51,6 +57,7 @@ export default function Community({ profile, setPage }) {
     const postQuery = supabase
       .from('posts')
       .select('*, author:profiles(full_name, role), lesson:lessons(title), assignment:assignments(title)')
+      .order('is_pinned', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false });
 
     const [postData, commentData, lessonData, assignmentData] = await Promise.all([
@@ -76,7 +83,13 @@ export default function Community({ profile, setPage }) {
     setAssignments(assignmentData.data || []);
 
     const rows = postData.data || [];
-    if (!selectedId && rows.length > 0) setSelectedId(rows[0].id);
+    const requestedPostId = localStorage.getItem('academy_open_post_id');
+    if (requestedPostId) {
+      localStorage.removeItem('academy_open_post_id');
+      setSelectedId(requestedPostId);
+    } else if (!selectedId && rows.length > 0) {
+      setSelectedId(rows[0].id);
+    }
   }
 
   async function createPost(e) {
@@ -96,7 +109,7 @@ export default function Community({ profile, setPage }) {
 
     const { data, error } = await supabase.from('posts').insert(payload).select('*').single();
     if (error) {
-      alert(`Paylaşım kaydedilemedi: ${error.message}\n\nSupabase SQL Editor içinde community_last_seen_v3.sql dosyasını çalıştırdığından emin ol.`);
+      alert(`Paylaşım kaydedilemedi: ${error.message}\n\nSupabase SQL Editor içinde community_last_seen_v3.sql ve dashboard_lessons_v4.sql dosyalarını çalıştırdığından emin ol.`);
       return;
     }
 
@@ -129,6 +142,25 @@ export default function Community({ profile, setPage }) {
     load();
   }
 
+  async function togglePostFlag(post, field) {
+    const { error } = await supabase.from('posts').update({ [field]: !post[field] }).eq('id', post.id);
+    if (error) {
+      alert(`Bu özellik için v4 SQL gerekli: ${error.message}`);
+      return;
+    }
+    load();
+  }
+
+  async function markHelpful(post) {
+    const next = Number(post.helpful_count || 0) + 1;
+    const { error } = await supabase.from('posts').update({ helpful_count: next }).eq('id', post.id);
+    if (error) {
+      alert(`Faydalı butonu için v4 SQL gerekli: ${error.message}`);
+      return;
+    }
+    load();
+  }
+
   function openLesson(id) {
     if (!id) return;
     localStorage.setItem('academy_open_lesson_id', id);
@@ -141,11 +173,24 @@ export default function Community({ profile, setPage }) {
     setPage?.('assignments');
   }
 
+  function runSharedCode(code) {
+    if (!code?.trim()) return;
+    localStorage.setItem('academy_runner_code', code);
+    setPage?.('code');
+  }
+
   const filteredPosts = useMemo(() => {
     const q = search.trim().toLocaleLowerCase('tr-TR');
-    if (!q) return posts;
-    return posts.filter((post) => `${post.title} ${post.content} ${post.code_snippet || ''}`.toLocaleLowerCase('tr-TR').includes(q));
-  }, [posts, search]);
+    return posts.filter((post) => {
+      const matchesSearch = !q || `${post.title} ${post.content} ${post.code_snippet || ''}`.toLocaleLowerCase('tr-TR').includes(q);
+      const matchesType = typeFilter === 'all' || (post.post_type || 'question') === typeFilter;
+      const matchesQuick = quickFilter === 'all'
+        || (quickFilter === 'pinned' && post.is_pinned)
+        || (quickFilter === 'solved' && post.is_solved)
+        || (quickFilter === 'code' && post.code_snippet);
+      return matchesSearch && matchesType && matchesQuick;
+    });
+  }, [posts, search, typeFilter, quickFilter]);
 
   const selected = posts.find((post) => post.id === selectedId) || filteredPosts[0] || null;
   const selectedComments = selected ? comments.filter((comment) => comment.post_id === selected.id) : [];
@@ -220,16 +265,33 @@ export default function Community({ profile, setPage }) {
               <Search size={17} />
               <input placeholder="Toplulukta ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
+            <div className="community-filter-row">
+              <Filter size={16} />
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                <option value="all">Tüm türler</option>
+                {POST_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+              </select>
+              <select value={quickFilter} onChange={(e) => setQuickFilter(e.target.value)}>
+                <option value="all">Tümü</option>
+                <option value="pinned">Sabitlenenler</option>
+                <option value="solved">Çözülenler</option>
+                <option value="code">Kod içerenler</option>
+              </select>
+            </div>
             <div className="community-post-list">
               {filteredPosts.length === 0 && <div className="empty-state small">Henüz paylaşım yok.</div>}
               {filteredPosts.map((post) => {
                 const relatedCount = comments.filter((comment) => comment.post_id === post.id).length;
                 return (
-                  <button key={post.id} className={`community-post-item ${selected?.id === post.id ? 'active' : ''}`} onClick={() => setSelectedId(post.id)}>
-                    <span className={`post-type-dot ${post.post_type || 'question'}`}>{typeMap[post.post_type]?.label || 'Paylaşım'}</span>
+                  <button key={post.id} className={`community-post-item ${selected?.id === post.id ? 'active' : ''} ${post.is_pinned ? 'pinned' : ''}`} onClick={() => setSelectedId(post.id)}>
+                    <span className={`post-type-dot ${post.post_type || 'question'}`}>{post.is_pinned ? '📌 ' : ''}{typeMap[post.post_type]?.label || 'Paylaşım'}</span>
                     <strong>{post.title}</strong>
                     <small>{post.author?.full_name} · {formatDateTime(post.created_at)} · {relatedCount} yorum</small>
-                    {post.code_snippet && <em><Code2 size={13} /> Kod içeriyor</em>}
+                    <span className="post-mini-badges">
+                      {post.code_snippet && <em><Code2 size={13} /> Kod</em>}
+                      {post.is_solved && <em className="solved"><CheckCircle2 size={13} /> Çözüldü</em>}
+                      {Number(post.helpful_count || 0) > 0 && <em><ThumbsUp size={13} /> {post.helpful_count}</em>}
+                    </span>
                   </button>
                 );
               })}
@@ -246,9 +308,18 @@ export default function Community({ profile, setPage }) {
                   <h3>{selected.title}</h3>
                   <p>{selected.author?.full_name} · {formatDateTime(selected.created_at)}</p>
                 </div>
-                {(profile.role === 'teacher' || selected.author_id === profile.id) && (
-                  <button className="icon-button danger" onClick={() => deletePost(selected.id)}><Trash2 size={17} /></button>
-                )}
+                <div className="post-admin-actions">
+                  <button className="secondary-button" onClick={() => markHelpful(selected)}><ThumbsUp size={16} /> Faydalı {Number(selected.helpful_count || 0) || ''}</button>
+                  {(profile.role === 'teacher' || selected.author_id === profile.id) && (
+                    <button className="secondary-button" onClick={() => togglePostFlag(selected, 'is_solved')}><CheckCircle2 size={16} /> {selected.is_solved ? 'Çözümü kaldır' : 'Çözüldü'}</button>
+                  )}
+                  {profile.role === 'teacher' && (
+                    <button className="secondary-button" onClick={() => togglePostFlag(selected, 'is_pinned')}><Pin size={16} /> {selected.is_pinned ? 'Sabiti kaldır' : 'Sabitle'}</button>
+                  )}
+                  {(profile.role === 'teacher' || selected.author_id === profile.id) && (
+                    <button className="icon-button danger" onClick={() => deletePost(selected.id)}><Trash2 size={17} /></button>
+                  )}
+                </div>
               </div>
 
               <div className="post-links-row">
@@ -260,6 +331,9 @@ export default function Community({ profile, setPage }) {
                 )}
                 {selected.resource_url && (
                   <a className="secondary-button" href={selected.resource_url} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Kaynağı aç</a>
+                )}
+                {selected.code_snippet && (
+                  <button className="primary-button" onClick={() => runSharedCode(selected.code_snippet)}><Code2 size={16} /> Bu kodu çalıştır</button>
                 )}
               </div>
 

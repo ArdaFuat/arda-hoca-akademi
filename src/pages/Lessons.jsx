@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase';
 import { CodeBlock, CodeEditor } from '../components/CodeBlock';
 import {
   ArrowLeft,
+  ArrowRight,
   BookOpen,
   CheckCircle2,
   ChevronRight,
   Clock3,
   Code2,
   Layers,
+  ListChecks,
   PlayCircle,
   Save,
   Search,
@@ -35,6 +37,7 @@ const emptyLesson = {
   content: '',
   example_code: '',
   practice_task: '',
+  quiz_json: '',
   difficulty: 'Başlangıç',
   estimated_minutes: 20,
   category_key: COURSE_SECTIONS[0].key,
@@ -72,8 +75,107 @@ function renderContent(content) {
   });
 }
 
-export default function Lessons({ profile }) {
+function normalizeQuiz(quizJson, lesson) {
+  let parsed = [];
+  if (Array.isArray(quizJson)) parsed = quizJson;
+  else if (typeof quizJson === 'string' && quizJson.trim()) {
+    try { parsed = JSON.parse(quizJson); } catch { parsed = []; }
+  }
+  if (Array.isArray(parsed) && parsed.length) return parsed;
+
+  return [
+    {
+      type: 'multiple_choice',
+      question: `${lesson?.title || 'Bu ders'} için en doğru çalışma yöntemi hangisidir?`,
+      options: ['Kodu okuyup geçmek', 'Kodu yazıp çalıştırmak', 'Sadece başlığı ezberlemek', 'Hiç pratik yapmamak'],
+      answer: 'Kodu yazıp çalıştırmak'
+    },
+    {
+      type: 'fill_blank',
+      question: 'Python’da ekrana çıktı vermek için ____ fonksiyonu kullanılır.',
+      answer: 'print'
+    }
+  ];
+}
+
+function QuizBox({ lesson, onCompleted }) {
+  const questions = useMemo(() => normalizeQuiz(lesson?.quiz_json, lesson), [lesson]);
+  const [answers, setAnswers] = useState({});
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    setAnswers({});
+    setChecked(false);
+  }, [lesson?.id]);
+
+  function normalize(value) {
+    return String(value || '').trim().toLocaleLowerCase('tr-TR');
+  }
+
+  const result = useMemo(() => {
+    return questions.map((question, index) => {
+      const expected = Array.isArray(question.answer) ? question.answer : [question.answer];
+      const ok = expected.some((item) => normalize(item) === normalize(answers[index]));
+      return ok;
+    });
+  }, [questions, answers]);
+
+  const correctCount = result.filter(Boolean).length;
+  const allCorrect = correctCount === questions.length;
+
+  return (
+    <section className="quiz-box">
+      <div className="quiz-header">
+        <div>
+          <h4><ListChecks size={18} /> Ders içi test</h4>
+          <p>Konuyu gerçekten anladığını görmek için küçük soruları cevapla.</p>
+        </div>
+        {checked && <strong className={allCorrect ? 'quiz-score success' : 'quiz-score'}>{correctCount}/{questions.length}</strong>}
+      </div>
+
+      <div className="quiz-list">
+        {questions.map((question, index) => (
+          <div className={`quiz-question ${checked ? (result[index] ? 'correct' : 'wrong') : ''}`} key={`${lesson?.id}-${index}`}>
+            <strong>{index + 1}. {question.question}</strong>
+            {question.type === 'fill_blank' ? (
+              <input
+                value={answers[index] || ''}
+                onChange={(e) => setAnswers({ ...answers, [index]: e.target.value })}
+                placeholder="Cevabı yaz..."
+              />
+            ) : (
+              <div className="quiz-options">
+                {(question.options || []).map((option) => (
+                  <label key={option} className={answers[index] === option ? 'selected' : ''}>
+                    <input
+                      type="radio"
+                      name={`quiz-${lesson?.id}-${index}`}
+                      checked={answers[index] === option}
+                      onChange={() => setAnswers({ ...answers, [index]: option })}
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            )}
+            {checked && !result[index] && <small>Doğru cevap: {Array.isArray(question.answer) ? question.answer[0] : question.answer}</small>}
+          </div>
+        ))}
+      </div>
+
+      <div className="quiz-actions">
+        <button className="secondary-button" onClick={() => setChecked(true)}>Cevapları kontrol et</button>
+        <button className="primary-button" disabled={!checked || !allCorrect} onClick={onCompleted}>
+          <CheckCircle2 size={16} /> Testi geçtim, dersi tamamla
+        </button>
+      </div>
+    </section>
+  );
+}
+
+export default function Lessons({ profile, session }) {
   const [lessons, setLessons] = useState([]);
+  const [progress, setProgress] = useState([]);
   const [selected, setSelected] = useState(null);
   const [detailMode, setDetailMode] = useState(false);
   const [activeSection, setActiveSection] = useState(COURSE_SECTIONS[0].key);
@@ -83,7 +185,7 @@ export default function Lessons({ profile }) {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [session?.user?.id]);
 
   async function load() {
     const { data, error } = await supabase
@@ -96,12 +198,20 @@ export default function Lessons({ profile }) {
       const rows = data || [];
       setLessons(rows);
 
+      if (session?.user?.id) {
+        const progressRes = await supabase
+          .from('lesson_progress')
+          .select('*')
+          .eq('student_id', session.user.id);
+        if (!progressRes.error) setProgress(progressRes.data || []);
+      }
+
       const requestedLessonId = localStorage.getItem('academy_open_lesson_id');
       const requestedLesson = requestedLessonId ? rows.find((lesson) => lesson.id === requestedLessonId) : null;
 
       if (requestedLesson) {
         localStorage.removeItem('academy_open_lesson_id');
-        selectLesson(requestedLesson, true);
+        selectLesson(requestedLesson, true, false);
         return;
       }
 
@@ -109,17 +219,27 @@ export default function Lessons({ profile }) {
         const first = rows[0];
         setSelected(first);
         setActiveSection(inferCategory(first));
-        setForm({ ...emptyLesson, ...first, category_key: inferCategory(first) });
+        setForm({ ...emptyLesson, ...first, quiz_json: JSON.stringify(first.quiz_json || [], null, 2), category_key: inferCategory(first) });
       }
     }
   }
 
-  function selectLesson(lesson, openDetail = true) {
+  async function touchProgress(lesson) {
+    if (!session?.user?.id || !lesson?.id || profile?.role === 'teacher') return;
+    await supabase.from('lesson_progress').upsert({
+      student_id: session.user.id,
+      lesson_id: lesson.id,
+      last_opened_at: new Date().toISOString()
+    }, { onConflict: 'student_id,lesson_id' });
+  }
+
+  function selectLesson(lesson, openDetail = true, markOpen = true) {
     setSelected(lesson);
     setDetailMode(openDetail);
     setActiveSection(inferCategory(lesson));
-    setForm({ ...emptyLesson, ...lesson, category_key: inferCategory(lesson) });
+    setForm({ ...emptyLesson, ...lesson, quiz_json: JSON.stringify(lesson.quiz_json || [], null, 2), category_key: inferCategory(lesson) });
     setMessage('');
+    if (markOpen) touchProgress(lesson);
   }
 
   function selectSection(sectionKey) {
@@ -128,7 +248,7 @@ export default function Lessons({ profile }) {
     const firstInSection = lessons.find((lesson) => inferCategory(lesson) === sectionKey);
     if (firstInSection) {
       setSelected(firstInSection);
-      setForm({ ...emptyLesson, ...firstInSection, category_key: inferCategory(firstInSection) });
+      setForm({ ...emptyLesson, ...firstInSection, quiz_json: JSON.stringify(firstInSection.quiz_json || [], null, 2), category_key: inferCategory(firstInSection) });
     } else {
       setSelected(null);
       setForm({ ...emptyLesson, category_key: sectionKey, order_index: lessons.length + 1 });
@@ -138,7 +258,10 @@ export default function Lessons({ profile }) {
   function startNewLesson(sectionKey = activeSection) {
     setSelected(null);
     setDetailMode(false);
-    setForm({ ...emptyLesson, category_key: sectionKey, order_index: lessons.length + 1 });
+    setForm({ ...emptyLesson, category_key: sectionKey, order_index: lessons.length + 1, quiz_json: JSON.stringify([
+      { type: 'multiple_choice', question: 'Bu dersin ana amacı nedir?', options: ['Konuyu anlamak', 'Sadece kopyalamak'], answer: 'Konuyu anlamak' },
+      { type: 'fill_blank', question: 'Python kod dosyalarının uzantısı ____ şeklindedir.', answer: '.py' }
+    ], null, 2) });
     setMessage('');
   }
 
@@ -146,12 +269,22 @@ export default function Lessons({ profile }) {
     e.preventDefault();
     setMessage('');
 
+    let quizPayload = [];
+    try {
+      quizPayload = form.quiz_json?.trim() ? JSON.parse(form.quiz_json) : [];
+      if (!Array.isArray(quizPayload)) throw new Error('Test JSON alanı liste olmalı.');
+    } catch (error) {
+      setMessage(`Test soruları JSON hatası: ${error.message}`);
+      return;
+    }
+
     const payload = {
       title: form.title,
       description: form.description,
       content: form.content,
       example_code: form.example_code,
       practice_task: form.practice_task || '',
+      quiz_json: quizPayload,
       difficulty: form.difficulty || 'Başlangıç',
       estimated_minutes: Number(form.estimated_minutes || 20),
       category_key: form.category_key || activeSection,
@@ -184,6 +317,22 @@ export default function Lessons({ profile }) {
     load();
   }
 
+  async function completeLesson() {
+    if (!selected?.id || !session?.user?.id) return;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('lesson_progress').upsert({
+      student_id: session.user.id,
+      lesson_id: selected.id,
+      completed_at: now,
+      last_opened_at: now
+    }, { onConflict: 'student_id,lesson_id' });
+    if (error) {
+      alert(`Ders tamamlanamadı: ${error.message}\n\nSupabase SQL Editor içinde dashboard_lessons_v4.sql dosyasını çalıştırdığından emin ol.`);
+      return;
+    }
+    load();
+  }
+
   const filteredLessons = useMemo(() => {
     const q = search.trim().toLocaleLowerCase('tr-TR');
     return lessons.filter((lesson) => {
@@ -196,6 +345,11 @@ export default function Lessons({ profile }) {
   const activeSectionInfo = sectionMap[activeSection] || COURSE_SECTIONS[0];
   const selectedSectionInfo = selected ? sectionMap[inferCategory(selected)] : activeSectionInfo;
   const totalMinutes = lessons.reduce((sum, lesson) => sum + Number(lesson.estimated_minutes || 20), 0);
+  const completedIds = new Set(progress.filter((row) => row.completed_at).map((row) => row.lesson_id));
+  const selectedIndex = selected ? lessons.findIndex((lesson) => lesson.id === selected.id) : -1;
+  const previousLesson = selectedIndex > 0 ? lessons[selectedIndex - 1] : null;
+  const nextLesson = selectedIndex >= 0 && selectedIndex < lessons.length - 1 ? lessons[selectedIndex + 1] : null;
+  const percent = lessons.length ? Math.round((completedIds.size / lessons.length) * 100) : 0;
 
   return (
     <div className="page course-page">
@@ -204,12 +358,12 @@ export default function Lessons({ profile }) {
           <div>
             <div className="pill"><BookOpen size={16} /> Kurs Planı</div>
             <h2>Python Eğitim Yol Haritası</h2>
-            <p>Konuları kurs bölümleri halinde takip et. Önce bölüm seç, sonra o bölümün derslerini sırayla aç.</p>
+            <p>Konuları kurs bölümleri halinde takip et. Dersleri aç, testleri çöz, ilerlemeni kaydet.</p>
           </div>
           <div className="course-hero-stats">
             <div><strong>{COURSE_SECTIONS.length}</strong><span>Bölüm</span></div>
             <div><strong>{lessons.length}</strong><span>Ders</span></div>
-            <div><strong>{totalMinutes}</strong><span>Dakika</span></div>
+            <div><strong>%{percent}</strong><span>İlerleme</span></div>
           </div>
         </section>
       )}
@@ -221,6 +375,7 @@ export default function Lessons({ profile }) {
             <div className="reader-topline">
               <span><CheckCircle2 size={16} /> Ders {selected.order_index}</span>
               <span>{selectedSectionInfo?.title}</span>
+              {completedIds.has(selected.id) && <span className="completed-reader-badge">Tamamlandı</span>}
             </div>
             <h2>{selected.title}</h2>
             <p className="reader-description">{selected.description}</p>
@@ -245,6 +400,16 @@ export default function Lessons({ profile }) {
                 <p>{selected.practice_task}</p>
               </div>
             )}
+
+            {profile?.role !== 'teacher' && <QuizBox lesson={selected} onCompleted={completeLesson} />}
+
+            <div className="lesson-navigation-row">
+              <button className="secondary-button" disabled={!previousLesson} onClick={() => previousLesson && selectLesson(previousLesson, true)}><ArrowLeft size={16} /> Önceki ders</button>
+              {profile?.role === 'teacher' ? null : (
+                <button className="primary-button" onClick={completeLesson}><CheckCircle2 size={16} /> Dersi tamamlandı işaretle</button>
+              )}
+              <button className="secondary-button" disabled={!nextLesson} onClick={() => nextLesson && selectLesson(nextLesson, true)}>Sonraki ders <ArrowRight size={16} /></button>
+            </div>
           </article>
         </section>
       ) : (
@@ -260,13 +425,14 @@ export default function Lessons({ profile }) {
             </div>
             <div className="section-list">
               {COURSE_SECTIONS.map((section) => {
-                const count = getSectionLessonCount(lessons, section.key);
+                const sectionLessons = lessons.filter((lesson) => inferCategory(lesson) === section.key);
+                const done = sectionLessons.filter((lesson) => completedIds.has(lesson.id)).length;
                 return (
                   <button key={section.key} className={`section-card ${activeSection === section.key ? 'active' : ''}`} onClick={() => selectSection(section.key)}>
                     <span className="section-number">{section.accent}</span>
                     <span className="section-main">
                       <strong>{section.shortTitle}</strong>
-                      <small>{count} ders</small>
+                      <small>{done}/{sectionLessons.length} ders</small>
                     </span>
                     <ChevronRight size={17} />
                   </button>
@@ -290,14 +456,14 @@ export default function Lessons({ profile }) {
             <div className="lesson-roadmap">
               {filteredLessons.length === 0 && <div className="panel empty-state">Bu bölümde ders bulunamadı.</div>}
               {filteredLessons.map((lesson, index) => (
-                <button key={lesson.id} className={`roadmap-item ${selected?.id === lesson.id ? 'active' : ''}`} onClick={() => selectLesson(lesson, true)}>
+                <button key={lesson.id} className={`roadmap-item ${selected?.id === lesson.id ? 'active' : ''} ${completedIds.has(lesson.id) ? 'completed' : ''}`} onClick={() => selectLesson(lesson, true)}>
                   <span className="roadmap-index">{String(index + 1).padStart(2, '0')}</span>
                   <span className="roadmap-body">
                     <strong>{lesson.title}</strong>
                     <small>{lesson.description}</small>
                     <em><Clock3 size={13} /> {lesson.estimated_minutes || 20} dk · {lesson.difficulty || 'Başlangıç'}</em>
                   </span>
-                  <PlayCircle size={22} />
+                  {completedIds.has(lesson.id) ? <CheckCircle2 size={22} /> : <PlayCircle size={22} />}
                 </button>
               ))}
             </div>
@@ -310,7 +476,7 @@ export default function Lessons({ profile }) {
           <div className="panel-header">
             <div>
               <h3>{selected ? 'Dersi düzenle' : 'Yeni ders ekle'}</h3>
-              <p className="muted">Bu alan sadece öğretmene görünür. Öğrenciler kurs planını ve ders içeriklerini görür.</p>
+              <p className="muted">Test JSON alanında çoktan seçmeli ve boşluk doldurma soruları oluşturabilirsin.</p>
             </div>
             {selected && <button className="danger-button" onClick={() => deleteLesson(selected.id)}><Trash2 size={16} /> Sil</button>}
           </div>
@@ -356,6 +522,10 @@ export default function Lessons({ profile }) {
             <label className="span-2">
               Mini görev
               <textarea rows="3" value={form.practice_task} onChange={(e) => setForm({ ...form, practice_task: e.target.value })} />
+            </label>
+            <label className="span-2">
+              Test soruları JSON
+              <textarea rows="9" value={form.quiz_json} onChange={(e) => setForm({ ...form, quiz_json: e.target.value })} placeholder='[{"type":"multiple_choice","question":"...","options":["A","B"],"answer":"A"},{"type":"fill_blank","question":"Python dosyası ____ uzantılıdır.","answer":".py"}]' />
             </label>
             <label className="checkbox-label span-2">
               <input type="checkbox" checked={form.visible} onChange={(e) => setForm({ ...form, visible: e.target.checked })} />
