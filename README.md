@@ -139,3 +139,7 @@ supabase/messages_realtime_v5.sql
 ```
 
 Bu SQL, `public.messages` tablosunu Supabase Realtime yayınına ekler.
+
+## v7 - 1970s inspired tasarım
+
+Bu sürümde tüm arayüz 1970'ler ilhamlı sıcak retro palete geçirildi: krem kağıt zemin, avocado green, burnt orange, mustard yellow, kahverengi paneller, yuvarlak retro kartlar ve hafif doku/pattern efektleri.
