@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { CodeBlock, CodeEditor } from '../components/CodeBlock';
+import { CodeEditor, CodeOutput, RunnableCodeBlock } from '../components/CodeBlock';
 import {
   ArrowLeft,
   ArrowRight,
@@ -63,16 +63,106 @@ function getSectionLessonCount(lessons, sectionKey) {
   return lessons.filter((lesson) => inferCategory(lesson) === sectionKey).length;
 }
 
-function renderContent(content) {
-  if (!content) return <p className="muted">Bu ders için konu anlatımı henüz eklenmemiş.</p>;
+function parseLessonContent(content) {
+  const lines = String(content || '').replace(/\r\n/g, '\n').split('\n');
+  const blocks = [];
+  let textLines = [];
+  let fenceLang = null;
+  let fenceLines = [];
 
-  return content.split('\n').map((line, index) => {
-    if (!line.trim()) return <br key={index} />;
-    if (line.startsWith('### ')) return <h4 key={index}>{line.replace('### ', '')}</h4>;
-    if (line.startsWith('## ')) return <h3 key={index}>{line.replace('## ', '')}</h3>;
-    if (line.startsWith('- ')) return <li key={index}>{line.replace('- ', '')}</li>;
-    return <p key={index}>{line}</p>;
+  function flushText() {
+    if (!textLines.length) return;
+    blocks.push({ type: 'text', content: textLines.join('\n') });
+    textLines = [];
+  }
+
+  lines.forEach((line) => {
+    const fenceMatch = line.match(/^```\s*([A-Za-z0-9_-]*)\s*$/);
+    if (fenceMatch) {
+      if (fenceLang !== null) {
+        const lang = fenceLang || 'python';
+        blocks.push({ type: lang === 'output' || lang === 'çıktı' || lang === 'cikti' ? 'output' : 'code', language: lang, content: fenceLines.join('\n') });
+        fenceLang = null;
+        fenceLines = [];
+      } else {
+        flushText();
+        fenceLang = fenceMatch[1] || 'python';
+        fenceLines = [];
+      }
+      return;
+    }
+
+    if (fenceLang !== null) fenceLines.push(line);
+    else textLines.push(line);
   });
+
+  if (fenceLang !== null) blocks.push({ type: 'code', language: fenceLang || 'python', content: fenceLines.join('\n') });
+  flushText();
+  return blocks;
+}
+
+function TextContentBlock({ content }) {
+  const lines = content.split('\n');
+  const elements = [];
+  let listItems = [];
+
+  function flushList(key) {
+    if (!listItems.length) return;
+    elements.push(<ul key={`ul-${key}`}>{listItems.map((item, index) => <li key={index}>{item}</li>)}</ul>);
+    listItems = [];
+  }
+
+  lines.forEach((line, index) => {
+    if (!line.trim()) {
+      flushList(index);
+      elements.push(<br key={`br-${index}`} />);
+      return;
+    }
+    if (line.startsWith('- ')) {
+      listItems.push(line.replace('- ', ''));
+      return;
+    }
+    flushList(index);
+    if (line.startsWith('### ')) elements.push(<h4 key={index}>{line.replace('### ', '')}</h4>);
+    else if (line.startsWith('## ')) elements.push(<h3 key={index}>{line.replace('## ', '')}</h3>);
+    else elements.push(<p key={index}>{line}</p>);
+  });
+  flushList('last');
+  return elements;
+}
+
+function LessonContentRenderer({ content, onSendToRunner }) {
+  const blocks = parseLessonContent(content);
+  if (!blocks.length) return <p className="muted">Bu ders için konu anlatımı henüz eklenmemiş.</p>;
+
+  const rendered = [];
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index];
+    if (block.type === 'text') {
+      rendered.push(<TextContentBlock content={block.content} key={`text-${index}`} />);
+      continue;
+    }
+    if (block.type === 'output') {
+      rendered.push(<CodeOutput output={block.content} title="Çıktı" key={`out-${index}`} />);
+      continue;
+    }
+
+    const next = blocks[index + 1];
+    const pairedOutput = next?.type === 'output' ? next.content : '';
+    if (pairedOutput) index += 1;
+    rendered.push(
+      <div className="inline-lesson-code" key={`code-${index}`}>
+        <RunnableCodeBlock
+          code={block.content}
+          title={`ders_ornegi_${index + 1}.py`}
+          language={block.language || 'python'}
+          expectedOutput={pairedOutput}
+          onSendToRunner={onSendToRunner}
+        />
+      </div>
+    );
+  }
+  return rendered;
 }
 
 function normalizeQuiz(quizJson, lesson) {
@@ -173,7 +263,7 @@ function QuizBox({ lesson, onCompleted }) {
   );
 }
 
-export default function Lessons({ profile, session }) {
+export default function Lessons({ profile, session, setPage }) {
   const [lessons, setLessons] = useState([]);
   const [progress, setProgress] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -182,6 +272,26 @@ export default function Lessons({ profile, session }) {
   const [form, setForm] = useState(emptyLesson);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
+
+  function sendCodeToRunner(code) {
+    if (!code?.trim()) return;
+    localStorage.setItem('academy_runner_code', code);
+    setPage?.('code');
+  }
+
+  function appendContentCodeTemplate() {
+    const snippet = `
+
+### Örnek kod
+\`\`\`python
+print("Merhaba Arda Hoca")
+\`\`\`
+\`\`\`output
+Merhaba Arda Hoca
+\`\`\`
+`;
+    setForm((prev) => ({ ...prev, content: `${prev.content || ''}${snippet}` }));
+  }
 
   useEffect(() => {
     load();
@@ -385,12 +495,12 @@ export default function Lessons({ profile, session }) {
               <span>{selected.difficulty || 'Başlangıç'}</span>
             </div>
 
-            <div className="lesson-content-rich whitespace">{renderContent(selected.content)}</div>
+            <div className="lesson-content-rich whitespace"><LessonContentRenderer content={selected.content} onSendToRunner={sendCodeToRunner} /></div>
 
             {selected.example_code && (
               <div className="example-section">
                 <h4><Code2 size={17} /> Örnek kod</h4>
-                <CodeBlock code={selected.example_code} title={`${selected.title || 'ornek'}.py`} />
+                <RunnableCodeBlock code={selected.example_code} title={`${selected.title || 'ornek'}.py`} onSendToRunner={sendCodeToRunner} />
               </div>
             )}
 
@@ -513,7 +623,9 @@ export default function Lessons({ profile, session }) {
             </label>
             <label className="span-2">
               Konu anlatımı
-              <textarea rows="10" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
+              <textarea rows="10" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder={'Normal metin yazabilirsin. Araya kod eklemek için aşağıdaki butonu kullan veya ```python ... ``` ve ```output ... ``` blokları yaz.'} />
+              <span className="field-help">Konu anlatımı içinde kod ve çıktı göstermek için kod bloğu şablonu ekleyebilirsin.</span>
+              <button type="button" className="secondary-button small inline-template-button" onClick={appendContentCodeTemplate}>+ Konu arasına kod + çıktı ekle</button>
             </label>
             <label className="span-2">
               Örnek kod

@@ -1,4 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Play, Send } from 'lucide-react';
+import { runPythonCode } from '../lib/pythonRunner';
 
 const PYTHON_KEYWORDS = new Set([
   'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else',
@@ -71,6 +73,50 @@ export function CodeBlock({ code = '', title = 'main.py', language = 'python', c
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+export function CodeOutput({ output = '', title = 'Çıktı' }) {
+  return (
+    <div className="code-output-card">
+      <div className="code-output-title">{title}</div>
+      <pre>{output || 'Çıktı yok.'}</pre>
+    </div>
+  );
+}
+
+export function RunnableCodeBlock({ code = '', title = 'main.py', language = 'python', expectedOutput = '', onSendToRunner, compact = false }) {
+  const [output, setOutput] = useState(expectedOutput || '');
+  const [running, setRunning] = useState(false);
+
+  async function handleRun() {
+    setRunning(true);
+    setOutput('Python hazırlanıyor...');
+    try {
+      const result = await runPythonCode(code);
+      setOutput(result || 'Kod çalıştı, çıktı üretmedi.');
+    } catch (error) {
+      setOutput(String(error));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="runnable-code-block">
+      <CodeBlock code={code} title={title} language={language} compact={compact} />
+      <div className="code-actions-row">
+        <button type="button" className="secondary-button small" onClick={handleRun} disabled={running}>
+          <Play size={15} /> {running ? 'Çalışıyor...' : 'Çıktıyı çalıştır'}
+        </button>
+        {onSendToRunner && (
+          <button type="button" className="ghost-button small" onClick={() => onSendToRunner(code)}>
+            <Send size={15} /> Runner’da aç
+          </button>
+        )}
+      </div>
+      {output && <CodeOutput output={output} title={expectedOutput ? 'Beklenen çıktı / Son çıktı' : 'Çıktı'} />}
     </div>
   );
 }

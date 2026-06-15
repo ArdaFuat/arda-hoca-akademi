@@ -77,6 +77,14 @@ export default function App() {
       return nextProfile;
     }
 
+    if (data.is_deleted) {
+      alert('Bu öğrenci hesabı öğretmen tarafından silinmiş. Giriş yapılamaz.');
+      await supabase.auth.signOut();
+      setSession(null);
+      setProfile(null);
+      return null;
+    }
+
     setProfile(data);
     await touchLastSeen();
     return data;

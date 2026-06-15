@@ -76,6 +76,7 @@ export default function Messages({ profile, session }) {
       .from('profiles')
       .select('id, full_name, role, last_seen_at, avatar_url')
       .eq('role', 'student')
+      .or('is_deleted.is.null,is_deleted.eq.false')
       .order('full_name');
 
     if (error) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Clock3, ImageOff, Save, Shield, UserCheck } from 'lucide-react';
+import { Clock3, ImageOff, Save, Shield, Trash2, UserCheck } from 'lucide-react';
 import { formatDate, formatDateTime, formatRelativeTime, isRecentlyActive } from '../lib/helpers';
 import Avatar from '../components/Avatar';
 
@@ -17,12 +17,16 @@ export default function Admin({ profile }) {
 
   async function load() {
     const [profilesRes, lessonsRes, assignmentsRes] = await Promise.all([
-      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+      supabase.from('profiles').select('*').or('is_deleted.is.null,is_deleted.eq.false').order('created_at', { ascending: false }),
       supabase.from('lessons').select('*').order('order_index'),
       supabase.from('assignments').select('*, assigned_student:profiles!assignments_assigned_to_fkey(full_name)').order('created_at', { ascending: false })
     ]);
 
-    const profileRows = profilesRes.data || [];
+    let profileRows = profilesRes.data || [];
+    if (profilesRes.error) {
+      const fallbackProfiles = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      profileRows = (fallbackProfiles.data || []).filter((user) => !user.is_deleted);
+    }
     setStudents(profileRows);
     setLessons(lessonsRes.data || []);
     setAssignments(assignmentsRes.data || []);
@@ -83,6 +87,28 @@ export default function Admin({ profile }) {
     setSavingId('');
   }
 
+
+  async function deleteStudent(user) {
+    if (user.role !== 'student') return;
+    const confirmed = confirm(`${user.full_name} adlı öğrenciyi silmek istediğinden emin misin?
+
+Bu öğrenci artık giriş yaptığında platformu kullanamaz. Paylaşımları ve ödev kayıtları sistemde kalabilir.`);
+    if (!confirmed) return;
+
+    setSavingId(user.id);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString(), last_seen_at: null })
+      .eq('id', user.id)
+      .eq('role', 'student');
+
+    if (error) alert(`Öğrenci silinemedi: ${error.message}
+
+Supabase SQL Editor içinde community_interactions_v8.sql dosyasını çalıştırdığından emin ol.`);
+    await load();
+    setSavingId('');
+  }
+
   return (
     <div className="page admin-page">
       <div className="page-header">
@@ -119,6 +145,7 @@ export default function Admin({ profile }) {
                 <th>Son görülme</th>
                 <th>Durum</th>
                 <th>Rol işlemi</th>
+                <th>Sil</th>
               </tr>
             </thead>
             <tbody>
@@ -181,6 +208,15 @@ export default function Admin({ profile }) {
                         user.role === 'teacher'
                           ? <button className="secondary-button small" onClick={() => makeStudent(user)}>Öğrenci yap</button>
                           : <button className="secondary-button small" onClick={() => makeTeacher(user)}>Öğretmen yap</button>
+                      )}
+                    </td>
+                    <td>
+                      {isStudent ? (
+                        <button className="danger-button small" disabled={savingId === user.id} onClick={() => deleteStudent(user)}>
+                          <Trash2 size={15} /> Sil
+                        </button>
+                      ) : (
+                        <span className="muted">-</span>
                       )}
                     </td>
                   </tr>

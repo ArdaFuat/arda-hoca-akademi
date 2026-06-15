@@ -7,21 +7,23 @@ import {
   Code2,
   ExternalLink,
   Filter,
+  Heart,
   Link as LinkIcon,
   MessageSquarePlus,
   Pin,
+  Reply,
   Search,
+  Sparkles,
   Tag,
-  ThumbsUp,
   Trash2,
   Users
 } from 'lucide-react';
 import { formatDateTime } from '../lib/helpers';
-import { CodeBlock, CodeEditor } from '../components/CodeBlock';
+import { CodeEditor, RunnableCodeBlock } from '../components/CodeBlock';
 
 const POST_TYPES = [
   { value: 'question', label: 'Soru', helper: 'Anlamadığın bir konuyu sor.' },
-  { value: 'code', label: 'Kod Paylaşımı', helper: 'Kodunu paylaş, yorum al.' },
+  { value: 'code', label: 'Kod Paylaşımı', helper: 'Kodunu paylaş, çıktısını göster, yorum al.' },
   { value: 'project', label: 'Mini Proje', helper: 'Yaptığın çalışmayı göster.' },
   { value: 'resource', label: 'Kaynak', helper: 'Link, araç veya not paylaş.' },
   { value: 'announcement', label: 'Duyuru', helper: 'Öğretmen duyurusu veya sınıf notu.' }
@@ -32,6 +34,7 @@ const typeMap = Object.fromEntries(POST_TYPES.map((type) => [type.value, type]))
 export default function Community({ profile, setPage }) {
   const [posts, setPosts] = useState([]);
   const [comments, setComments] = useState([]);
+  const [likes, setLikes] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -39,6 +42,7 @@ export default function Community({ profile, setPage }) {
   const [typeFilter, setTypeFilter] = useState('all');
   const [quickFilter, setQuickFilter] = useState('all');
   const [commentDrafts, setCommentDrafts] = useState({});
+  const [replyingTo, setReplyingTo] = useState('');
   const [form, setForm] = useState({
     title: '',
     content: '',
@@ -60,29 +64,41 @@ export default function Community({ profile, setPage }) {
       .order('is_pinned', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false });
 
-    const [postData, commentData, lessonData, assignmentData] = await Promise.all([
+    const [postData, commentData, likeData, lessonData, assignmentData] = await Promise.all([
       postQuery,
       supabase.from('comments').select('*, author:profiles(full_name, role)').order('created_at', { ascending: true }),
+      supabase.from('community_likes').select('*'),
       supabase.from('lessons').select('id, title, category_key, order_index').order('order_index', { ascending: true }),
       supabase.from('assignments').select('id, title, due_date').order('created_at', { ascending: false })
     ]);
 
+    let rows = [];
     if (postData.error) {
       console.warn('Topluluk ek alanları hazır değil, temel postlar yükleniyor:', postData.error.message);
       const fallback = await supabase
         .from('posts')
         .select('*, author:profiles(full_name, role)')
         .order('created_at', { ascending: false });
-      setPosts(fallback.data || []);
+      rows = fallback.data || [];
+      setPosts(rows);
     } else {
-      setPosts(postData.data || []);
+      rows = postData.data || [];
+      setPosts(rows);
     }
 
-    setComments(commentData.data || []);
+    if (commentData.error) console.warn('Yorumlar yüklenemedi:', commentData.error.message);
+    else setComments(commentData.data || []);
+
+    if (likeData.error) {
+      console.warn('Beğeni tablosu hazır değil:', likeData.error.message);
+      setLikes([]);
+    } else {
+      setLikes(likeData.data || []);
+    }
+
     setLessons(lessonData.data || []);
     setAssignments(assignmentData.data || []);
 
-    const rows = postData.data || [];
     const requestedPostId = localStorage.getItem('academy_open_post_id');
     if (requestedPostId) {
       localStorage.removeItem('academy_open_post_id');
@@ -109,7 +125,7 @@ export default function Community({ profile, setPage }) {
 
     const { data, error } = await supabase.from('posts').insert(payload).select('*').single();
     if (error) {
-      alert(`Paylaşım kaydedilemedi: ${error.message}\n\nSupabase SQL Editor içinde community_last_seen_v3.sql ve dashboard_lessons_v4.sql dosyalarını çalıştırdığından emin ol.`);
+      alert(`Paylaşım kaydedilemedi: ${error.message}\n\nSupabase SQL Editor içinde community_interactions_v8.sql dosyasını çalıştırdığından emin ol.`);
       return;
     }
 
@@ -118,15 +134,26 @@ export default function Community({ profile, setPage }) {
     load();
   }
 
-  async function createComment(postId) {
-    const text = commentDrafts[postId]?.trim();
+  async function createComment(postId, parentId = null) {
+    const draftKey = parentId ? `reply-${parentId}` : postId;
+    const text = commentDrafts[draftKey]?.trim();
     if (!text) return;
-    await supabase.from('comments').insert({
+
+    const payload = {
       post_id: postId,
       author_id: profile.id,
-      content: text
-    });
-    setCommentDrafts({ ...commentDrafts, [postId]: '' });
+      content: text,
+      parent_id: parentId
+    };
+
+    const { error } = await supabase.from('comments').insert(payload);
+    if (error) {
+      alert(`Yorum kaydedilemedi: ${error.message}`);
+      return;
+    }
+
+    setCommentDrafts({ ...commentDrafts, [draftKey]: '' });
+    setReplyingTo('');
     load();
   }
 
@@ -138,24 +165,37 @@ export default function Community({ profile, setPage }) {
   }
 
   async function deleteComment(id) {
+    if (!confirm('Bu yorumu silmek istiyor musun?')) return;
     await supabase.from('comments').delete().eq('id', id);
     load();
   }
 
   async function togglePostFlag(post, field) {
+    if (profile.role !== 'teacher') return;
     const { error } = await supabase.from('posts').update({ [field]: !post[field] }).eq('id', post.id);
     if (error) {
-      alert(`Bu özellik için v4 SQL gerekli: ${error.message}`);
+      alert(`Bu özellik için community_interactions_v8.sql gerekli: ${error.message}`);
       return;
     }
     load();
   }
 
-  async function markHelpful(post) {
-    const next = Number(post.helpful_count || 0) + 1;
-    const { error } = await supabase.from('posts').update({ helpful_count: next }).eq('id', post.id);
+  function likeCount(targetType, targetId) {
+    return likes.filter((like) => like.target_type === targetType && like.target_id === targetId).length;
+  }
+
+  function iLiked(targetType, targetId) {
+    return likes.some((like) => like.target_type === targetType && like.target_id === targetId && like.user_id === profile.id);
+  }
+
+  async function toggleLike(targetType, targetId) {
+    const existing = likes.find((like) => like.target_type === targetType && like.target_id === targetId && like.user_id === profile.id);
+    const { error } = existing
+      ? await supabase.from('community_likes').delete().eq('id', existing.id)
+      : await supabase.from('community_likes').insert({ target_type: targetType, target_id: targetId, user_id: profile.id });
+
     if (error) {
-      alert(`Faydalı butonu için v4 SQL gerekli: ${error.message}`);
+      alert(`Beğeni kaydedilemedi: ${error.message}\n\nSupabase SQL Editor içinde community_interactions_v8.sql dosyasını çalıştırdığından emin ol.`);
       return;
     }
     load();
@@ -173,7 +213,7 @@ export default function Community({ profile, setPage }) {
     setPage?.('assignments');
   }
 
-  function runSharedCode(code) {
+  function sendCodeToRunner(code) {
     if (!code?.trim()) return;
     localStorage.setItem('academy_runner_code', code);
     setPage?.('code');
@@ -187,14 +227,56 @@ export default function Community({ profile, setPage }) {
       const matchesQuick = quickFilter === 'all'
         || (quickFilter === 'pinned' && post.is_pinned)
         || (quickFilter === 'solved' && post.is_solved)
+        || (quickFilter === 'helpful' && post.is_helpful)
+        || (quickFilter === 'liked' && iLiked('post', post.id))
         || (quickFilter === 'code' && post.code_snippet);
       return matchesSearch && matchesType && matchesQuick;
     });
-  }, [posts, search, typeFilter, quickFilter]);
+  }, [posts, likes, search, typeFilter, quickFilter]);
 
   const selected = posts.find((post) => post.id === selectedId) || filteredPosts[0] || null;
   const selectedComments = selected ? comments.filter((comment) => comment.post_id === selected.id) : [];
   const currentType = typeMap[form.post_type] || typeMap.question;
+
+  function childComments(parentId) {
+    return selectedComments.filter((comment) => comment.parent_id === parentId);
+  }
+
+  function renderComment(comment, depth = 0) {
+    const replies = childComments(comment.id);
+    const canDelete = profile.role === 'teacher' || comment.author_id === profile.id;
+    return (
+      <div className={`comment threaded depth-${Math.min(depth, 3)}`} key={comment.id}>
+        <div className="comment-head">
+          <div>
+            <strong>{comment.author?.full_name}</strong>
+            <span>{formatDateTime(comment.created_at)}</span>
+          </div>
+          {canDelete && <button className="tiny-button danger" onClick={() => deleteComment(comment.id)}>Sil</button>}
+        </div>
+        <p>{comment.content}</p>
+        <div className="comment-actions-row">
+          <button className={`tiny-button ${iLiked('comment', comment.id) ? 'liked' : ''}`} onClick={() => toggleLike('comment', comment.id)}>
+            <Heart size={13} /> Beğen {likeCount('comment', comment.id) || ''}
+          </button>
+          <button className="tiny-button" onClick={() => setReplyingTo(replyingTo === comment.id ? '' : comment.id)}>
+            <Reply size={13} /> Yanıtla
+          </button>
+        </div>
+        {replyingTo === comment.id && (
+          <div className="comment-form reply-form">
+            <input
+              value={commentDrafts[`reply-${comment.id}`] || ''}
+              onChange={(e) => setCommentDrafts({ ...commentDrafts, [`reply-${comment.id}`]: e.target.value })}
+              placeholder={`${comment.author?.full_name || 'yoruma'} yanıt yaz...`}
+            />
+            <button className="secondary-button" onClick={() => createComment(selected.id, comment.id)}>Yanıtla</button>
+          </div>
+        )}
+        {replies.length > 0 && <div className="reply-list">{replies.map((reply) => renderComment(reply, depth + 1))}</div>}
+      </div>
+    );
+  }
 
   return (
     <div className="page community-page">
@@ -202,7 +284,7 @@ export default function Community({ profile, setPage }) {
         <div>
           <div className="pill"><Users size={16} /> Topluluk</div>
           <h2>Sınıf topluluğu</h2>
-          <p>Kod paylaş, soru sor, kaynak ekle, ilgili dersi veya ödevi paylaşımına bağla.</p>
+          <p>Kod paylaş, çıktısını çalıştır, yorumlara yanıt ver, beğen ve öğretmen işaretlemeleriyle konuları düzenli tut.</p>
         </div>
       </div>
 
@@ -275,6 +357,8 @@ export default function Community({ profile, setPage }) {
                 <option value="all">Tümü</option>
                 <option value="pinned">Sabitlenenler</option>
                 <option value="solved">Çözülenler</option>
+                <option value="helpful">Faydalı seçilenler</option>
+                <option value="liked">Beğendiklerim</option>
                 <option value="code">Kod içerenler</option>
               </select>
             </div>
@@ -289,8 +373,9 @@ export default function Community({ profile, setPage }) {
                     <small>{post.author?.full_name} · {formatDateTime(post.created_at)} · {relatedCount} yorum</small>
                     <span className="post-mini-badges">
                       {post.code_snippet && <em><Code2 size={13} /> Kod</em>}
+                      {post.is_helpful && <em className="helpful"><Sparkles size={13} /> Faydalı</em>}
                       {post.is_solved && <em className="solved"><CheckCircle2 size={13} /> Çözüldü</em>}
-                      {Number(post.helpful_count || 0) > 0 && <em><ThumbsUp size={13} /> {post.helpful_count}</em>}
+                      {likeCount('post', post.id) > 0 && <em><Heart size={13} /> {likeCount('post', post.id)}</em>}
                     </span>
                   </button>
                 );
@@ -309,12 +394,15 @@ export default function Community({ profile, setPage }) {
                   <p>{selected.author?.full_name} · {formatDateTime(selected.created_at)}</p>
                 </div>
                 <div className="post-admin-actions">
-                  <button className="secondary-button" onClick={() => markHelpful(selected)}><ThumbsUp size={16} /> Faydalı {Number(selected.helpful_count || 0) || ''}</button>
-                  {(profile.role === 'teacher' || selected.author_id === profile.id) && (
-                    <button className="secondary-button" onClick={() => togglePostFlag(selected, 'is_solved')}><CheckCircle2 size={16} /> {selected.is_solved ? 'Çözümü kaldır' : 'Çözüldü'}</button>
-                  )}
+                  <button className={`secondary-button ${iLiked('post', selected.id) ? 'liked-button' : ''}`} onClick={() => toggleLike('post', selected.id)}>
+                    <Heart size={16} /> Beğen {likeCount('post', selected.id) || ''}
+                  </button>
                   {profile.role === 'teacher' && (
-                    <button className="secondary-button" onClick={() => togglePostFlag(selected, 'is_pinned')}><Pin size={16} /> {selected.is_pinned ? 'Sabiti kaldır' : 'Sabitle'}</button>
+                    <>
+                      <button className={`secondary-button ${selected.is_helpful ? 'active-action' : ''}`} onClick={() => togglePostFlag(selected, 'is_helpful')}><Sparkles size={16} /> {selected.is_helpful ? 'Faydalı kaldır' : 'Faydalı'}</button>
+                      <button className={`secondary-button ${selected.is_solved ? 'active-action' : ''}`} onClick={() => togglePostFlag(selected, 'is_solved')}><CheckCircle2 size={16} /> {selected.is_solved ? 'Çözümü kaldır' : 'Çözüldü'}</button>
+                      <button className={`secondary-button ${selected.is_pinned ? 'active-action' : ''}`} onClick={() => togglePostFlag(selected, 'is_pinned')}><Pin size={16} /> {selected.is_pinned ? 'Sabiti kaldır' : 'Sabitle'}</button>
+                    </>
                   )}
                   {(profile.role === 'teacher' || selected.author_id === profile.id) && (
                     <button className="icon-button danger" onClick={() => deletePost(selected.id)}><Trash2 size={17} /></button>
@@ -332,9 +420,6 @@ export default function Community({ profile, setPage }) {
                 {selected.resource_url && (
                   <a className="secondary-button" href={selected.resource_url} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Kaynağı aç</a>
                 )}
-                {selected.code_snippet && (
-                  <button className="primary-button" onClick={() => runSharedCode(selected.code_snippet)}><Code2 size={16} /> Bu kodu çalıştır</button>
-                )}
               </div>
 
               {(selected.lesson?.title || selected.assignment?.title) && (
@@ -348,8 +433,8 @@ export default function Community({ profile, setPage }) {
 
               {selected.code_snippet && (
                 <div className="community-code-section">
-                  <h4><Code2 size={17} /> Paylaşılan kod</h4>
-                  <CodeBlock code={selected.code_snippet} title="topluluk_paylasimi.py" />
+                  <h4><Code2 size={17} /> Paylaşılan kod ve çıktısı</h4>
+                  <RunnableCodeBlock code={selected.code_snippet} title="topluluk_paylasimi.py" onSendToRunner={sendCodeToRunner} />
                 </div>
               )}
 
@@ -362,19 +447,8 @@ export default function Community({ profile, setPage }) {
 
               <div className="comments detail-comments">
                 <h4>Yorumlar</h4>
-                {selectedComments.length === 0 && <p className="muted">Bu paylaşımda henüz yorum yok.</p>}
-                {selectedComments.map((comment) => (
-                  <div className="comment" key={comment.id}>
-                    <div>
-                      <strong>{comment.author?.full_name}</strong>
-                      <span>{formatDateTime(comment.created_at)}</span>
-                    </div>
-                    <p>{comment.content}</p>
-                    {(profile.role === 'teacher' || comment.author_id === profile.id) && (
-                      <button className="tiny-button" onClick={() => deleteComment(comment.id)}>Sil</button>
-                    )}
-                  </div>
-                ))}
+                {selectedComments.filter((comment) => !comment.parent_id).length === 0 && <p className="muted">Bu paylaşımda henüz yorum yok.</p>}
+                {selectedComments.filter((comment) => !comment.parent_id).map((comment) => renderComment(comment))}
               </div>
 
               <div className="comment-form">

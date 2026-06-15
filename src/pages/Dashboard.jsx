@@ -32,7 +32,7 @@ export default function Dashboard({ profile, session, setPage }) {
       profile.role === 'teacher'
         ? supabase.from('messages').select('id,student_id,created_at,sender:profiles!messages_sender_id_fkey(full_name, role), student:profiles!messages_student_id_fkey(full_name)').order('created_at', { ascending: false }).limit(40)
         : supabase.from('messages').select('id,student_id,created_at,sender:profiles!messages_sender_id_fkey(full_name, role)').eq('student_id', session.user.id).order('created_at', { ascending: false }).limit(5),
-      supabase.from('profiles').select('id,full_name,role,last_seen_at,avatar_url').order('last_seen_at', { ascending: false, nullsFirst: false }).limit(10)
+      supabase.from('profiles').select('id,full_name,role,last_seen_at,avatar_url').or('is_deleted.is.null,is_deleted.eq.false').order('last_seen_at', { ascending: false, nullsFirst: false }).limit(10)
     ]);
 
     setLatestLessons(lessons.data || []);

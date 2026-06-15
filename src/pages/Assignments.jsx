@@ -43,7 +43,7 @@ export default function Assignments({ profile, session }) {
     }
 
     if (profile.role === 'teacher') {
-      const { data: studentList } = await supabase.from('profiles').select('id, full_name, role').eq('role', 'student').order('full_name');
+      const { data: studentList } = await supabase.from('profiles').select('id, full_name, role').eq('role', 'student').or('is_deleted.is.null,is_deleted.eq.false').order('full_name');
       setStudents(studentList || []);
       const { data: allSubs } = await supabase
         .from('submissions')

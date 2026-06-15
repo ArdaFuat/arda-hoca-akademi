@@ -32,6 +32,7 @@ export default function Layout({ children, page, setPage, profile }) {
     const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name, role, last_seen_at, avatar_url')
+      .or('is_deleted.is.null,is_deleted.eq.false')
       .order('last_seen_at', { ascending: false, nullsFirst: false })
       .limit(8);
 
