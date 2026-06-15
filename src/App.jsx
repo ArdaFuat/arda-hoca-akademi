@@ -9,6 +9,7 @@ import Community from './pages/Community';
 import Messages from './pages/Messages';
 import CodeRunner from './pages/CodeRunner';
 import Admin from './pages/Admin';
+import Profile from './pages/Profile';
 
 const PAGES = {
   dashboard: Dashboard,
@@ -17,6 +18,7 @@ const PAGES = {
   community: Community,
   messages: Messages,
   code: CodeRunner,
+  profile: Profile,
   admin: Admin
 };
 
@@ -78,6 +80,11 @@ export default function App() {
     setProfile(data);
     await touchLastSeen();
     return data;
+  }
+
+  async function reloadProfile() {
+    if (!session?.user) return null;
+    return await loadProfile(session.user);
   }
 
   async function applySession(nextSession) {
@@ -160,7 +167,7 @@ export default function App() {
 
   return (
     <Layout page={safePage} setPage={setPage} session={session} profile={profile}>
-      <ActivePage session={session} profile={profile} setPage={setPage} />
+      <ActivePage session={session} profile={profile} setPage={setPage} onProfileUpdated={reloadProfile} />
     </Layout>
   );
 }

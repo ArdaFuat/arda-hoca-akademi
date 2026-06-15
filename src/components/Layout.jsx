@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, ChevronLeft, ChevronRight, ClipboardList, Code2, Home, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, Shield, Users } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, ClipboardList, Code2, Home, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, Shield, UserCircle, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { initials, isRecentlyActive } from '../lib/helpers';
+import { isRecentlyActive } from '../lib/helpers';
+import Avatar from './Avatar';
 
 const baseItems = [
   { key: 'dashboard', label: 'Ana Sayfa', icon: Home },
@@ -9,7 +10,8 @@ const baseItems = [
   { key: 'assignments', label: 'Ödevler', icon: ClipboardList },
   { key: 'community', label: 'Topluluk', icon: Users },
   { key: 'messages', label: 'Arda Hoca Mesaj', icon: MessageCircle },
-  { key: 'code', label: 'Python Çalıştır', icon: Code2 }
+  { key: 'code', label: 'Python Çalıştır', icon: Code2 },
+  { key: 'profile', label: 'Profilim', icon: UserCircle }
 ];
 
 export default function Layout({ children, page, setPage, profile }) {
@@ -29,7 +31,7 @@ export default function Layout({ children, page, setPage, profile }) {
   async function loadOnlineUsers() {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, role, last_seen_at')
+      .select('id, full_name, role, last_seen_at, avatar_url')
       .order('last_seen_at', { ascending: false, nullsFirst: false })
       .limit(8);
 
@@ -93,7 +95,7 @@ export default function Layout({ children, page, setPage, profile }) {
               {onlinePreview.map((user) => (
                 <div className="online-mini-user" key={user.id} title={`${user.full_name} aktif`}>
                   <span className="online-dot"></span>
-                  <div className="avatar tiny">{initials(user.full_name)}</div>
+                  <Avatar name={user.full_name} url={user.avatar_url} className="tiny" />
                   <strong>{user.full_name}</strong>
                   <small>{user.role === 'teacher' ? 'Hoca' : 'Öğrenci'}</small>
                 </div>
@@ -103,7 +105,7 @@ export default function Layout({ children, page, setPage, profile }) {
         </section>
 
         <div className="sidebar-user">
-          <div className="avatar">{initials(profile?.full_name)}</div>
+          <Avatar name={profile?.full_name} url={profile?.avatar_url} />
           <div className="sidebar-user-text">
             <strong>{profile?.full_name || 'Öğrenci'}</strong>
             <span>{profile?.role === 'teacher' ? 'Öğretmen' : 'Öğrenci'}</span>

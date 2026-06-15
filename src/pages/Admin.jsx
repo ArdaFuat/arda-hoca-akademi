@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Clock3, Shield, UserCheck } from 'lucide-react';
+import { Clock3, ImageOff, Save, Shield, UserCheck } from 'lucide-react';
 import { formatDate, formatDateTime, formatRelativeTime, isRecentlyActive } from '../lib/helpers';
+import Avatar from '../components/Avatar';
 
 export default function Admin({ profile }) {
   const [students, setStudents] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [nameDrafts, setNameDrafts] = useState({});
+  const [savingId, setSavingId] = useState('');
 
   useEffect(() => {
     load();
@@ -18,9 +21,17 @@ export default function Admin({ profile }) {
       supabase.from('lessons').select('*').order('order_index'),
       supabase.from('assignments').select('*, assigned_student:profiles!assignments_assigned_to_fkey(full_name)').order('created_at', { ascending: false })
     ]);
-    setStudents(profilesRes.data || []);
+
+    const profileRows = profilesRes.data || [];
+    setStudents(profileRows);
     setLessons(lessonsRes.data || []);
     setAssignments(assignmentsRes.data || []);
+
+    const drafts = {};
+    profileRows.forEach((user) => {
+      drafts[user.id] = user.full_name || '';
+    });
+    setNameDrafts(drafts);
   }
 
   async function makeTeacher(user) {
@@ -35,13 +46,50 @@ export default function Admin({ profile }) {
     load();
   }
 
+  async function saveStudentName(user) {
+    const nextName = (nameDrafts[user.id] || '').trim();
+    if (!nextName) {
+      alert('İsim boş bırakılamaz.');
+      return;
+    }
+
+    if (nextName === user.full_name) return;
+
+    setSavingId(user.id);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: nextName })
+      .eq('id', user.id)
+      .eq('role', 'student');
+
+    if (error) alert(error.message);
+    await load();
+    setSavingId('');
+  }
+
+  async function clearStudentAvatar(user) {
+    if (!user.avatar_url) return;
+    if (!confirm(`${user.full_name} adlı öğrencinin profil resmi kaldırılsın mı?`)) return;
+
+    setSavingId(user.id);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ avatar_url: '' })
+      .eq('id', user.id)
+      .eq('role', 'student');
+
+    if (error) alert(error.message);
+    await load();
+    setSavingId('');
+  }
+
   return (
-    <div className="page">
+    <div className="page admin-page">
       <div className="page-header">
         <div>
           <div className="pill"><Shield size={16} /> Yönetim</div>
           <h2>Öğretmen paneli</h2>
-          <p>Öğrencileri, dersleri, ödevleri ve kullanıcı hareketlerini genel olarak kontrol et.</p>
+          <p>Öğrencilerin adlarını sen düzenlersin. Öğrenciler kendi adını değiştiremez, yalnızca profil resmini değiştirebilir.</p>
         </div>
       </div>
 
@@ -56,23 +104,71 @@ export default function Admin({ profile }) {
         <div className="panel-header">
           <div>
             <h3>Kullanıcılar</h3>
-            <p className="muted">Son görülme bilgisi kullanıcı siteye girince ve açık kaldığı sürece güncellenir.</p>
+            <p className="muted">Öğrenci ismini sen değiştirebilirsin. Profil fotoğrafı uygunsuzsa buradan kaldırabilirsin.</p>
           </div>
           <button className="secondary-button" onClick={load}>Yenile</button>
         </div>
         <div className="table-wrap">
-          <table>
+          <table className="admin-user-table">
             <thead>
-              <tr><th>Ad</th><th>Rol</th><th>Kayıt</th><th>Son görülme</th><th>Durum</th><th>İşlem</th></tr>
+              <tr>
+                <th>Kullanıcı</th>
+                <th>Rol</th>
+                <th>Öğrenci adı</th>
+                <th>Profil resmi</th>
+                <th>Son görülme</th>
+                <th>Durum</th>
+                <th>Rol işlemi</th>
+              </tr>
             </thead>
             <tbody>
               {students.map((user) => {
                 const online = isRecentlyActive(user.last_seen_at);
+                const isStudent = user.role === 'student';
+                const isSelf = user.id === profile.id;
+                const draftName = nameDrafts[user.id] ?? user.full_name ?? '';
+                const nameChanged = draftName.trim() && draftName.trim() !== user.full_name;
+
                 return (
                   <tr key={user.id}>
-                    <td>{user.full_name}</td>
+                    <td>
+                      <div className="admin-user-cell">
+                        <Avatar name={user.full_name} url={user.avatar_url} className="small" />
+                        <div>
+                          <strong>{user.full_name}</strong>
+                          <span>{formatDate(user.created_at)}</span>
+                        </div>
+                      </div>
+                    </td>
                     <td>{user.role === 'teacher' ? 'Öğretmen' : 'Öğrenci'}</td>
-                    <td>{formatDate(user.created_at)}</td>
+                    <td>
+                      {isStudent ? (
+                        <div className="inline-edit">
+                          <input
+                            value={draftName}
+                            onChange={(event) => setNameDrafts((prev) => ({ ...prev, [user.id]: event.target.value }))}
+                            placeholder="Öğrenci adı"
+                          />
+                          <button className="secondary-button small" disabled={savingId === user.id || !nameChanged} onClick={() => saveStudentName(user)}>
+                            <Save size={15} /> Kaydet
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="muted">Öğretmen adı buradan değiştirilmez.</span>
+                      )}
+                    </td>
+                    <td>
+                      {isStudent ? (
+                        <div className="avatar-admin-actions">
+                          <Avatar name={user.full_name} url={user.avatar_url} className="tiny" />
+                          <button className="danger-button small" disabled={savingId === user.id || !user.avatar_url} onClick={() => clearStudentAvatar(user)}>
+                            <ImageOff size={15} /> Kaldır
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="muted">-</span>
+                      )}
+                    </td>
                     <td>
                       <div className="last-seen-cell">
                         <strong>{formatRelativeTime(user.last_seen_at)}</strong>
@@ -81,10 +177,10 @@ export default function Admin({ profile }) {
                     </td>
                     <td><span className={`status-pill ${online ? 'online' : 'offline'}`}>{online ? 'Aktif' : 'Çevrim dışı'}</span></td>
                     <td>
-                      {user.id !== profile.id && (
+                      {!isSelf && (
                         user.role === 'teacher'
-                          ? <button className="secondary-button" onClick={() => makeStudent(user)}>Öğrenci yap</button>
-                          : <button className="secondary-button" onClick={() => makeTeacher(user)}>Öğretmen yap</button>
+                          ? <button className="secondary-button small" onClick={() => makeStudent(user)}>Öğrenci yap</button>
+                          : <button className="secondary-button small" onClick={() => makeTeacher(user)}>Öğretmen yap</button>
                       )}
                     </td>
                   </tr>

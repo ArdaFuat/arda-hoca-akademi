@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { BookOpen, CheckCircle2, ClipboardList, Code2, MessageCircle, Sparkles, TrendingUp, Users } from 'lucide-react';
 import { formatDate, formatDateTime, formatRelativeTime, isRecentlyActive } from '../lib/helpers';
+import Avatar from '../components/Avatar';
 
 export default function Dashboard({ profile, session, setPage }) {
   const [stats, setStats] = useState({ lessons: 0, assignments: 0, posts: 0, messages: 0, progress: 0, submissions: 0 });
@@ -31,7 +32,7 @@ export default function Dashboard({ profile, session, setPage }) {
       profile.role === 'teacher'
         ? supabase.from('messages').select('id,student_id,created_at,sender:profiles!messages_sender_id_fkey(full_name, role), student:profiles!messages_student_id_fkey(full_name)').order('created_at', { ascending: false }).limit(40)
         : supabase.from('messages').select('id,student_id,created_at,sender:profiles!messages_sender_id_fkey(full_name, role)').eq('student_id', session.user.id).order('created_at', { ascending: false }).limit(5),
-      supabase.from('profiles').select('id,full_name,role,last_seen_at').order('last_seen_at', { ascending: false, nullsFirst: false }).limit(10)
+      supabase.from('profiles').select('id,full_name,role,last_seen_at,avatar_url').order('last_seen_at', { ascending: false, nullsFirst: false }).limit(10)
     ]);
 
     setLatestLessons(lessons.data || []);
@@ -176,7 +177,11 @@ export default function Dashboard({ profile, session, setPage }) {
           </div>
           {activeUsers.length === 0 ? <p className="muted">Şu an aktif görünen kişi yok.</p> : activeUsers.map((user) => (
             <div className="mini-row active-user-row" key={user.id}>
-              <strong><span className="online-dot"></span>{user.full_name}</strong>
+              <div className="user-inline">
+                <span className="online-dot"></span>
+                <Avatar name={user.full_name} url={user.avatar_url} className="tiny" />
+                <strong>{user.full_name}</strong>
+              </div>
               <span>{user.role === 'teacher' ? 'Öğretmen' : 'Öğrenci'} · {formatRelativeTime(user.last_seen_at)}</span>
             </div>
           ))}

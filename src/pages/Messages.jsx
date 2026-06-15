@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { MessageCircle, Send, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { formatDateTime } from '../lib/helpers';
+import Avatar from '../components/Avatar';
 
 export default function Messages({ profile, session }) {
   const [students, setStudents] = useState([]);
@@ -73,7 +74,7 @@ export default function Messages({ profile, session }) {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, role, last_seen_at')
+      .select('id, full_name, role, last_seen_at, avatar_url')
       .eq('role', 'student')
       .order('full_name');
 
@@ -93,7 +94,7 @@ export default function Messages({ profile, session }) {
 
     const { data, error } = await supabase
       .from('messages')
-      .select('*, sender:profiles!messages_sender_id_fkey(full_name, role)')
+      .select('*, sender:profiles!messages_sender_id_fkey(full_name, role, avatar_url)')
       .eq('student_id', studentId)
       .order('created_at', { ascending: true });
 
@@ -123,7 +124,8 @@ export default function Messages({ profile, session }) {
     setSending(false);
   }
 
-  const selectedStudentName = students.find((student) => student.id === selectedStudent)?.full_name;
+  const selectedStudentProfile = students.find((student) => student.id === selectedStudent);
+  const selectedStudentName = selectedStudentProfile?.full_name;
 
   return (
     <div className="page messages-page">
@@ -150,6 +152,7 @@ export default function Messages({ profile, session }) {
             {!studentListError && students.length === 0 && <p className="muted">Henüz öğrenci yok. Öğrenci hesabı açıldıysa sayfayı yenile veya öğrencinin profil rolünü kontrol et.</p>}
             {students.map((student) => (
               <button key={student.id} className={selectedStudent === student.id ? 'active' : ''} onClick={() => setSelectedStudent(student.id)}>
+                <Avatar name={student.full_name} url={student.avatar_url} className="tiny" />
                 <span>{student.full_name}</span>
               </button>
             ))}
@@ -163,8 +166,17 @@ export default function Messages({ profile, session }) {
             <>
               <div className="chat-topbar">
                 <div>
-                  <strong>{profile.role === 'teacher' ? selectedStudentName || 'Öğrenci' : 'Arda Hoca'}</strong>
-                  <span>Mesajlar sayfa yenilemeden gelir.</span>
+                  <div className="chat-topbar-user">
+                    <Avatar
+                      name={profile.role === 'teacher' ? selectedStudentName || 'Öğrenci' : 'Arda Hoca'}
+                      url={profile.role === 'teacher' ? selectedStudentProfile?.avatar_url : ''}
+                      className="tiny"
+                    />
+                    <div>
+                      <strong>{profile.role === 'teacher' ? selectedStudentName || 'Öğrenci' : 'Arda Hoca'}</strong>
+                      <span>Mesajlar sayfa yenilemeden gelir.</span>
+                    </div>
+                  </div>
                 </div>
                 <button className="secondary-button small" onClick={() => loadMessages(selectedStudent)}>
                   <RefreshCw size={15} /> Yenile
@@ -177,7 +189,10 @@ export default function Messages({ profile, session }) {
                   const mine = msg.sender_id === session.user.id;
                   return (
                     <div className={`bubble ${mine ? 'mine' : ''}`} key={msg.id}>
-                      <strong>{msg.sender?.full_name || 'Kullanıcı'}</strong>
+                      <div className="bubble-author">
+                        <Avatar name={msg.sender?.full_name || 'Kullanıcı'} url={msg.sender?.avatar_url} className="tiny" />
+                        <strong>{msg.sender?.full_name || 'Kullanıcı'}</strong>
+                      </div>
                       <p>{msg.text}</p>
                       <span>{formatDateTime(msg.created_at)}</span>
                     </div>

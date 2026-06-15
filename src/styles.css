@@ -733,3 +733,48 @@ label .vscode-editor-card { margin-top: 8px; }
     min-height: 520px;
   }
 }
+
+/* Profile / avatar management v6 */
+.avatar { overflow: hidden; flex: 0 0 auto; }
+.avatar span { display: grid; place-items: center; width: 100%; height: 100%; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar.small { width: 38px; height: 38px; font-size: 13px; }
+.avatar.profile-avatar { width: 116px; height: 116px; font-size: 34px; border: 6px solid white; box-shadow: 0 18px 40px rgba(15, 23, 42, .14); }
+
+.profile-grid { display: grid; grid-template-columns: 360px 1fr; gap: 18px; align-items: start; }
+.profile-card-large { min-height: 280px; display: grid; place-items: center; text-align: center; background: radial-gradient(circle at top, #eef2ff, white 58%); }
+.profile-card-large h3 { margin: 16px 0 4px; font-size: 28px; letter-spacing: -.8px; }
+.profile-card-large p { margin: 0; color: var(--muted); font-weight: 800; }
+.profile-settings-card, .profile-readonly-card { display: grid; gap: 14px; }
+.profile-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.profile-readonly-card input:disabled { background: #f8fafc; color: #475569; opacity: 1; }
+
+.user-inline { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
+.user-inline strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.admin-user-cell { display: flex; align-items: center; gap: 10px; min-width: 190px; }
+.admin-user-cell > div:last-child { display: grid; gap: 2px; min-width: 0; }
+.admin-user-cell strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-user-cell span { color: var(--muted); font-size: 12px; }
+.inline-edit { display: grid; grid-template-columns: minmax(170px, 1fr) auto; gap: 8px; min-width: 310px; }
+.inline-edit input { padding: 10px 12px; border-radius: 12px; }
+.secondary-button.small, .danger-button.small { padding: 9px 11px; border-radius: 12px; font-size: 13px; white-space: nowrap; }
+.secondary-button:disabled, .danger-button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.avatar-admin-actions { display: flex; align-items: center; gap: 9px; min-width: 150px; }
+.admin-user-table td { vertical-align: middle; }
+
+.student-list button { display: flex; align-items: center; gap: 10px; }
+.chat-topbar-user { display: flex; align-items: center; gap: 10px; }
+.chat-topbar-user > div { display: grid; gap: 2px; }
+.bubble-author { display: flex; align-items: center; gap: 8px; }
+.bubble.mine .bubble-author .avatar { background: rgba(255,255,255,.16); color: white; }
+
+@media (max-width: 980px) {
+  .profile-grid { grid-template-columns: 1fr; }
+  .inline-edit { min-width: 250px; }
+}
+
+@media (max-width: 620px) {
+  .profile-actions { display: grid; }
+  .inline-edit { grid-template-columns: 1fr; min-width: 220px; }
+}
