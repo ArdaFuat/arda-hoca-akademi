@@ -16,5 +16,8 @@
     "react-dom": "^18.3.1",
     "lucide-react": "^0.468.0"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "engines": {
+    "node": ">=20 <21"
+  }
 }
