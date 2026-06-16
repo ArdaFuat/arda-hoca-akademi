@@ -15,26 +15,30 @@ export default function Login() {
     setLoading(true);
     setMessage('');
 
-    if (mode === 'register') {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName || 'Öğrenci' }
+    try {
+      if (mode === 'register') {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: fullName || 'Öğrenci' }
+          }
+        });
+
+        if (error) {
+          setMessage(error.message);
+        } else {
+          setMessage('Kayıt alındı. Supabase ayarına göre e-posta onayı gerekebilir.');
         }
-      });
-
-      if (error) {
-        setMessage(error.message);
       } else {
-        setMessage('Kayıt alındı. Supabase ayarına göre e-posta onayı gerekebilir.');
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) setMessage(error.message);
       }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setMessage(error.message);
+    } catch (error) {
+      setMessage(error?.message || 'Bağlantı hatası oluştu. Lütfen tekrar dene.');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   return (
